@@ -5,10 +5,19 @@ import json
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
+# Ensure UTF-8 stdout on Windows to prevent UnicodeEncodeError with emojis
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # Initialize FastMCP server
 mcp = FastMCP("TV Oracle Bridge")
 
 ORACLE_DIR = Path(__file__).parent.resolve()
+
+# Add local path to sys.path to ensure correct imports
+sys.path.append(str(ORACLE_DIR))
+from screener import run_screener as exec_screener
+from pattern_detector import detect_from_oracle_file
 
 @mcp.tool()
 def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int = 20000) -> str:
@@ -73,5 +82,56 @@ def list_indicators() -> str:
     except Exception as e:
         return f"Error: {e}"
 
+@mcp.tool()
+def capture_screenshot(symbol: str = "BINANCE:BTCUSDT", timeframe: str = "60", name: str = "mcp_capture.png") -> str:
+    """Capture a high-resolution visual screenshot of a TradingView chart.
+    
+    Args:
+        symbol: Market ticker to display (e.g. "BINANCE:BTCUSDT", "NASDAQ:AAPL").
+        timeframe: Chart interval (e.g. "60" for 1-hour, "D" for daily).
+        name: Name of the output image file saved in out/screenshots/.
+    """
+    try:
+        cmd = ["node", "remoteControl.mjs", "screenshot", symbol, timeframe, name]
+        result = subprocess.run(
+            cmd,
+            cwd=str(ORACLE_DIR),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        screenshot_path = ORACLE_DIR / "out" / "screenshots" / name
+        if not screenshot_path.exists():
+            return f"Error: Screenshot task completed but image {screenshot_path} not found. Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
+            
+        return f"Success: Screenshot saved to {screenshot_path}\nStdout:\n{result.stdout}"
+    except subprocess.CalledProcessError as e:
+        return f"Error running screenshot automation: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@mcp.tool()
+def run_screener(market: str = "crypto", condition: str = "top_volume", limit: int = 15) -> str:
+    """Query TradingView screener API to scan for technical market setups in real-time.
+    
+    Args:
+        market: Target category: "crypto", "forex", or "america" (for US stocks).
+        condition: Filter setup: "top_volume", "top_gainers", "oversold" (RSI < 30), or "overbought" (RSI > 70).
+        limit: Max number of assets to return (default: 15).
+    """
+    return exec_screener(market, condition, limit)
+
+@mcp.tool()
+def detect_patterns(key: str = "completa") -> str:
+    """Analyze the last 15 OHLC bars of a fetched indicator to identify classic candlestick patterns.
+    
+    Args:
+        key: The key of the indicator file to analyze (e.g. "completa", "data_science").
+    """
+    out_file = ORACLE_DIR / "out" / f"{key}.json"
+    return detect_from_oracle_file(str(out_file))
+
 if __name__ == "__main__":
     mcp.run()
+
