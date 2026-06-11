@@ -18,6 +18,7 @@ ORACLE_DIR = Path(__file__).parent.resolve()
 sys.path.append(str(ORACLE_DIR))
 from screener import run_screener as exec_screener
 from pattern_detector import detect_from_oracle_file
+from pine_docs import get_pine_docs as fetch_pine_docs, validate_pine_code as check_pine_syntax
 
 @mcp.tool()
 def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int = 20000) -> str:
@@ -131,6 +132,78 @@ def detect_patterns(key: str = "completa") -> str:
     """
     out_file = ORACLE_DIR / "out" / f"{key}.json"
     return detect_from_oracle_file(str(out_file))
+
+@mcp.tool()
+def get_pine_docs(function_name: str) -> str:
+    """Get offline documentation and autocompletion guide for a specific Pine Script function.
+    
+    Args:
+        function_name: The namespace.function of the Pine function (e.g. "ta.ema", "ta.rsi", "strategy.entry").
+    """
+    return fetch_pine_docs(function_name)
+
+@mcp.tool()
+def validate_pine_code(code: str) -> str:
+    """Analyze a block of Pine Script code for common version issues, obsolete syntax, and matching brackets.
+    
+    Args:
+        code: The Pine Script source code as a string.
+    """
+    return check_pine_syntax(code)
+
+@mcp.tool()
+def transpile_pine_script(file_path: str) -> str:
+    """Transpile a local Pine Script file to JavaScript offline using the safe subprocess wrapper for PineTS.
+    
+    Args:
+        file_path: Relative or absolute path to the local .pine script file.
+    """
+    try:
+        cmd = ["node", "pineTranspilerWrapper.mjs", file_path]
+        result = subprocess.run(
+            cmd,
+            cwd=str(ORACLE_DIR),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        return f"Error transpiling script: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@mcp.tool()
+def control_chart_macro(action_type: str = "save", value: str = "", symbol: str = "", interval: str = "") -> str:
+    """Execute a remote control macro on the active TradingView chart (change symbol, toggle drawings, or save layout).
+    
+    Args:
+        action_type: The macro to execute: "change_symbol", "toggle_drawings", or "save".
+        value: The parameter value for the macro (e.g. new symbol name "BINANCE:ETHUSDT" for action "change_symbol").
+        symbol: The default chart symbol to navigate to.
+        interval: The default chart timeframe.
+    """
+    try:
+        cmd = ["node", "remoteControl.mjs", "macro", action_type, value]
+        if symbol:
+            cmd.append(symbol)
+        if interval:
+            if not symbol:
+                cmd.append("") # placeholder for symbol
+            cmd.append(interval)
+            
+        result = subprocess.run(
+            cmd,
+            cwd=str(ORACLE_DIR),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return f"Success: Chart macro executed.\nStdout:\n{result.stdout}"
+    except subprocess.CalledProcessError as e:
+        return f"Error running chart macro: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
 
 if __name__ == "__main__":
     mcp.run()

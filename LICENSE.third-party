@@ -1,0 +1,67 @@
+# Third-Party Licenses and Attributions
+
+This project incorporates, adapts, or references components from the following open-source projects. We gratefully acknowledge the authors and maintainers of these projects.
+
+---
+
+## 1. @mathieuc/tradingview
+* **Description**: Real-time TradingView WebSocket client.
+* **License**: MIT
+* **URL**: https://github.com/Mathieu2301/TradingView-API
+
+---
+
+## 2. tradingview-mcp & TradingViewMCPServer
+* **Description**: Model Context Protocol servers for TradingView screening, indicators, and Pine helpers.
+* **License**: MIT
+* **URLs**:
+  * https://github.com/atilaahmettaner/tradingview-mcp
+  * https://github.com/lev-corrupted/TradingViewMCPServer
+  * https://github.com/tradesdontlie/tradingview-mcp
+
+---
+
+## 3. tvcontrol
+* **Description**: Remote control capabilities for TradingView charts.
+* **License**: MIT
+* **URL**: https://github.com/FerroxLabs/tvcontrol
+
+---
+
+## 4. TradingView-Screener
+* **Description**: Python screener queries for TradingView scanner API.
+* **License**: MIT
+* **URL**: https://github.com/shner-elmo/TradingView-Screener
+
+---
+
+## 5. pynecore
+* **Description**: Pine Script like Python framework.
+* **License**: Apache License 2.0
+* **URL**: https://github.com/PyneSys/pynecore
+
+---
+
+## 6. pineforge-engine
+* **Description**: Deterministic PineScript runtime.
+* **License**: Apache License 2.0
+* **URL**: https://github.com/pineforge-4pass/pineforge-engine
+
+---
+
+## Apache License 2.0 Text
+For components licensed under Apache License 2.0 (specifically pynecore and pineforge-engine):
+
+```
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```

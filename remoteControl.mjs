@@ -138,6 +138,92 @@ export async function captureChartScreenshot(symbol = "", timeframe = "", output
   return outputPath;
 }
 
+
+/**
+ * Open the chart, inject cookies, execute a specific macro (like change symbol, save, toggle drawings),
+ * and capture a screenshot of the resulting state.
+ */
+export async function executeChartMacro(symbol = "", interval = "", actionType = "save", value = "") {
+  const session = (process.env.TV_SESSION || "").trim();
+  const signature = (process.env.TV_SESSION_SIGN || "").trim();
+  const targetSymbol = symbol || process.env.TV_SYMBOL || "BINANCE:BTCUSDT";
+  const targetTimeframe = interval || process.env.TV_TIMEFRAME || "60";
+
+  if (!session) {
+    throw new Error("TV_SESSION is missing in environment variables.");
+  }
+
+  const browser = await launchBrowser();
+  const context = await browser.newContext({
+    viewport: { width: 1920, height: 1080 }
+  });
+
+  const domain = ".tradingview.com";
+  const cookies = [
+    { name: "sessionid", value: session, domain, path: "/", secure: true, httpOnly: true }
+  ];
+  if (signature) {
+    cookies.push({ name: "sessionid_sign", value: signature, domain, path: "/", secure: true, httpOnly: true });
+  }
+
+  await context.addCookies(cookies);
+  const page = await context.newPage();
+
+  const url = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(targetSymbol)}&interval=${targetTimeframe}`;
+  console.log(`[Macro Engine] Opening chart: ${url}`);
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+
+  console.log(`[Macro Engine] Waiting for selector...`);
+  try {
+    await page.waitForSelector("div.chart-markup-table", { timeout: 15000 });
+  } catch (e) {
+    console.warn("Chart selector not found, attempting to proceed.");
+  }
+  await page.waitForTimeout(5000);
+
+  // Focus the chart body before typing
+  await page.click("body");
+  await page.waitForTimeout(1000);
+
+  if (actionType === "change_symbol") {
+    const newSymbol = value || targetSymbol;
+    console.log(`[Macro Engine] Action: Change symbol to ${newSymbol}`);
+    // TradingView registers keyboard typing globally on the page to search symbols
+    await page.keyboard.type(newSymbol);
+    await page.waitForTimeout(1000);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(5000); // Wait for new symbol data
+  } 
+  
+  if (actionType === "toggle_drawings") {
+    console.log(`[Macro Engine] Action: Toggle drawings visibility`);
+    // Alt + H is the hotkey to hide/show drawings
+    await page.keyboard.press("Alt+H");
+    await page.waitForTimeout(2000);
+  }
+
+  if (actionType === "save" || actionType === "change_symbol") {
+    console.log(`[Macro Engine] Action: Save layout (Ctrl + S)`);
+    await page.keyboard.press("Control+S");
+    await page.waitForTimeout(3000);
+  }
+
+  // Define screenshot folder
+  const outDir = path.resolve("./out/screenshots");
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  const name = `macro_${actionType}_${Date.now()}.png`;
+  const outputPath = path.join(outDir, name);
+
+  console.log(`[Macro Engine] Capturing confirmation screenshot...`);
+  await page.screenshot({ path: outputPath });
+  console.log(`[Macro Engine] Done! Saved screenshot to: ${outputPath}`);
+
+  await context.close();
+  await browser.close();
+
+  return { outputPath, screenshotName: name };
+}
+
 // Self-run capability for manual command line execution
 if (process.argv[1] && process.argv[1].endsWith("remoteControl.mjs")) {
   const action = process.argv[2] || "screenshot";
@@ -153,5 +239,16 @@ if (process.argv[1] && process.argv[1].endsWith("remoteControl.mjs")) {
         console.error("Failed to capture screenshot:", err);
         process.exit(1);
       });
+  } else if (action === "macro") {
+    const macroType = process.argv[3] || "save";
+    const val = process.argv[4] || "";
+    console.log(`Starting macro: type=${macroType}, value=${val}`);
+    executeChartMacro(sym, tf, macroType, val)
+      .then((res) => console.log(`Done! Screenshot saved to: ${res.outputPath}`))
+      .catch((err) => {
+        console.error("Macro failed:", err);
+        process.exit(1);
+      });
   }
 }
+
