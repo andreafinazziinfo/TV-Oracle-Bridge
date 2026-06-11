@@ -20,6 +20,7 @@ from screener import run_screener as exec_screener
 from pattern_detector import detect_from_oracle_file, get_candlestick_annotations
 from pine_docs import get_pine_docs as fetch_pine_docs, validate_pine_code as check_pine_syntax
 from tv_cache import get_last_cached_timestamp, merge_and_update_cache, get_cached_bars
+from notifier import send_notification as dispatch_notification
 
 
 @mcp.tool()
@@ -291,6 +292,19 @@ def control_chart_macro(action_type: str = "save", value: str = "", symbol: str 
         return f"Error running chart macro: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
     except Exception as e:
         return f"Error: {e}"
+
+@mcp.tool()
+def send_notification(message: str, filepath: str = None) -> str:
+    """Send a notification message (with optional file attachment like chart screenshots) to configured Discord or Telegram channels.
+    
+    Args:
+        message: The text message to send. Supports Markdown.
+        filepath: Optional path to a local image or text file to send.
+    """
+    try:
+        return dispatch_notification(message, filepath)
+    except Exception as e:
+        return f"Error sending notification: {e}"
 
 if __name__ == "__main__":
     mcp.run()

@@ -111,6 +111,22 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         envList.appendChild(tr);
       }
+
+      // Check if notifications are configured
+      let notifiers = [];
+      if (stats.env.TV_NOTIFIER_DISCORD_WEBHOOK !== "Not Configured") notifiers.push("Discord");
+      if (stats.env.TV_NOTIFIER_TELEGRAM_TOKEN !== "Not Configured") notifiers.push("Telegram");
+      
+      const notifiersVal = document.getElementById("daemon-notifiers-val");
+      if (notifiersVal) {
+        if (notifiers.length > 0) {
+          notifiersVal.innerText = notifiers.join(" + ") + " Active";
+          notifiersVal.style.color = "var(--neon-green)";
+        } else {
+          notifiersVal.innerText = "Inactive";
+          notifiersVal.style.color = "var(--text-muted)";
+        }
+      }
     } catch (err) {
       console.error("Failed to load status:", err);
       dbStatusVal.innerText = "Error";
@@ -118,6 +134,113 @@ document.addEventListener("DOMContentLoaded", () => {
       envList.innerHTML = `<tr><td colspan="2" class="text-center text-red">Failed to load environment status: ${err.message}</td></tr>`;
     }
   }
+
+  // --- Daemon Controls ---
+  const daemonBadge = document.getElementById("daemon-badge-val");
+  const daemonIntervalInput = document.getElementById("daemon-interval-input");
+  const daemonStartBtn = document.getElementById("daemon-start-btn");
+  const daemonStopBtn = document.getElementById("daemon-stop-btn");
+  const daemonNextRunVal = document.getElementById("daemon-next-run-val");
+  const daemonNotifiersVal = document.getElementById("daemon-notifiers-val");
+  const daemonLogBox = document.getElementById("daemon-log-box");
+  const daemonClearLogsBtn = document.getElementById("daemon-clear-logs");
+
+  async function loadDaemonStatus() {
+    try {
+      const res = await fetch("/api/daemon/status");
+      const result = await res.json();
+      if (!result.success) return;
+      
+      // Update badge and buttons
+      if (result.isRunning) {
+        daemonBadge.innerText = "Active";
+        daemonBadge.style.backgroundColor = "rgba(0, 255, 135, 0.1)";
+        daemonBadge.style.color = "var(--neon-green)";
+        daemonBadge.style.borderColor = "rgba(0, 255, 135, 0.2)";
+        daemonStartBtn.classList.add("hidden");
+        daemonStopBtn.classList.remove("hidden");
+        daemonIntervalInput.disabled = true;
+      } else {
+        daemonBadge.innerText = "Inactive";
+        daemonBadge.style.backgroundColor = "rgba(255, 51, 102, 0.1)";
+        daemonBadge.style.color = "var(--neon-red)";
+        daemonBadge.style.borderColor = "rgba(255, 51, 102, 0.2)";
+        daemonStartBtn.classList.remove("hidden");
+        daemonStopBtn.classList.add("hidden");
+        daemonIntervalInput.disabled = false;
+      }
+      
+      // Next run time
+      if (result.nextRun) {
+        daemonNextRunVal.innerText = new Date(result.nextRun).toLocaleTimeString();
+      } else {
+        daemonNextRunVal.innerText = "-";
+      }
+      
+      // Logs console
+      if (result.logs && result.logs.length > 0) {
+        daemonLogBox.innerText = result.logs.join("\n");
+      } else {
+        daemonLogBox.innerText = "No activity logs...";
+      }
+    } catch (err) {
+      console.error("Failed to load daemon status:", err);
+    }
+  }
+
+  // Bind daemon control clicks
+  daemonStartBtn.addEventListener("click", async () => {
+    const mins = parseInt(daemonIntervalInput.value || "15", 10);
+    try {
+      daemonLogBox.innerText += "\n[Client] Sending start request...";
+      const res = await fetch("/api/daemon/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intervalMinutes: mins })
+      });
+      const result = await res.json();
+      if (result.success) {
+        loadDaemonStatus();
+      } else {
+        alert("Error starting daemon: " + result.error);
+      }
+    } catch (err) {
+      alert("Network error starting daemon: " + err.message);
+    }
+  });
+
+  daemonStopBtn.addEventListener("click", async () => {
+    try {
+      daemonLogBox.innerText += "\n[Client] Sending stop request...";
+      const res = await fetch("/api/daemon/stop", {
+        method: "POST"
+      });
+      const result = await res.json();
+      if (result.success) {
+        loadDaemonStatus();
+      } else {
+        alert("Error stopping daemon: " + result.error);
+      }
+    } catch (err) {
+      alert("Network error stopping daemon: " + err.message);
+    }
+  });
+
+  daemonClearLogsBtn.addEventListener("click", () => {
+    daemonLogBox.innerText = "Cleared console logs...";
+  });
+
+  // Initial daemon load
+  loadDaemonStatus();
+
+  // Set daemon polling loop (every 3 seconds)
+  setInterval(() => {
+    if (activeTabId === "status-tab") {
+      loadDaemonStatus();
+    }
+  }, 3000);
+
+
 
 
   // ==========================================

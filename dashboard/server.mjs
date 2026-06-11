@@ -17,6 +17,7 @@ const outDir = path.join(rootDir, "out");
 const screenshotsDir = path.join(outDir, "screenshots");
 const dbPath = path.join(outDir, "tv_oracle_cache.db");
 const docsDbPath = path.join(rootDir, "pine_docs_db.json");
+const localCfgPath = path.join(rootDir, "indicators.local.json");
 
 // Middleware
 app.use(express.json());
@@ -45,7 +46,10 @@ app.get("/api/status", async (req, res) => {
         TV_BROWSER_TYPE: process.env.TV_BROWSER_TYPE || "chromium",
         TV_BROWSER_HEADLESS: process.env.TV_BROWSER_HEADLESS || "true",
         TV_SESSION: maskSession(process.env.TV_SESSION),
-        TV_SESSION_SIGN: maskSession(process.env.TV_SESSION_SIGN)
+        TV_SESSION_SIGN: maskSession(process.env.TV_SESSION_SIGN),
+        TV_NOTIFIER_DISCORD_WEBHOOK: maskSession(process.env.TV_NOTIFIER_DISCORD_WEBHOOK),
+        TV_NOTIFIER_TELEGRAM_TOKEN: maskSession(process.env.TV_NOTIFIER_TELEGRAM_TOKEN),
+        TV_NOTIFIER_TELEGRAM_CHAT_ID: process.env.TV_NOTIFIER_TELEGRAM_CHAT_ID ? "Configured" : "Not Configured"
       }
     };
 
@@ -235,6 +239,113 @@ app.post("/api/download", async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// --- Background Caching Daemon and Notifier ---
+let autoRefreshInterval = null;
+let isDaemonRunning = false;
+let daemonLogs = [];
+let nextRunTime = null;
+let currentIntervalMinutes = 15;
+
+function logDaemon(msg) {
+  const logStr = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  console.log(logStr);
+  daemonLogs.push(logStr);
+  if (daemonLogs.length > 200) daemonLogs.shift();
+}
+
+async function sendSystemNotification(msg) {
+  try {
+    const cmd = `python notifier.py "${msg.replace(/"/g, '\\"')}"`;
+    await execPromise(cmd, { cwd: rootDir });
+  } catch (err) {
+    // Ignore notification failures
+  }
+}
+
+async function runRefreshCycle() {
+  logDaemon("Starting background cache refresh cycle...");
+  sendSystemNotification("⚡ [Auto-Refresher] Caching cycle started in background.");
+  try {
+    if (!fs.existsSync(localCfgPath)) {
+      logDaemon("No indicators.local.json found. Skipping cycle.");
+      sendSystemNotification("⚠️ [Auto-Refresher] Caching skipped: indicators.local.json not found.");
+      return;
+    }
+    const cfgContent = fs.readFileSync(localCfgPath, "utf8");
+    const cfg = JSON.parse(cfgContent);
+    const keys = Object.keys(cfg);
+    logDaemon(`Found ${keys.length} indicators in config: ${keys.join(", ")}`);
+    
+    for (const key of keys) {
+      logDaemon(`Refreshing cache for indicator: ${key}...`);
+      // We call fetchIndicator.mjs with range 100 and waitMs 8000 for fast delta-sync
+      const cmd = `node fetchIndicator.mjs ${key} 100 8000`;
+      try {
+        const { stdout } = await execPromise(cmd, { cwd: rootDir });
+        logDaemon(`Success: Refreshed '${key}'.`);
+      } catch (err) {
+        logDaemon(`Error: Failed refreshing '${key}': ${err.message}`);
+        sendSystemNotification(`❌ [Auto-Refresher] Failed refreshing '${key}': ${err.message}`);
+      }
+    }
+    logDaemon("Background cache refresh cycle completed.");
+    sendSystemNotification("✅ [Auto-Refresher] Background caching cycle completed successfully.");
+  } catch (err) {
+    logDaemon(`Refresh cycle error: ${err.message}`);
+    sendSystemNotification(`❌ [Auto-Refresher] Caching cycle error: ${err.message}`);
+  }
+}
+
+// 6. GET /api/daemon/status - Retrieve background auto-refresher status and logs
+app.get("/api/daemon/status", (req, res) => {
+  res.json({
+    success: true,
+    isRunning: isDaemonRunning,
+    intervalMinutes: currentIntervalMinutes,
+    nextRun: nextRunTime ? nextRunTime.toISOString() : null,
+    logs: daemonLogs
+  });
+});
+
+// 7. POST /api/daemon/start - Start the background caching daemon
+app.post("/api/daemon/start", (req, res) => {
+  if (isDaemonRunning) {
+    return res.json({ success: true, message: "Daemon is already running." });
+  }
+  const mins = parseInt(req.body.intervalMinutes || "15", 10);
+  currentIntervalMinutes = mins;
+  isDaemonRunning = true;
+  logDaemon(`Daemon started. Interval set to: ${mins} minutes.`);
+  sendSystemNotification(`⚡ [Auto-Refresher] Background Caching Daemon started (Interval: ${mins}m).`);
+  
+  // Run first cycle immediately
+  runRefreshCycle();
+  
+  // Schedule subsequent cycles
+  autoRefreshInterval = setInterval(() => {
+    runRefreshCycle();
+    nextRunTime = new Date(Date.now() + currentIntervalMinutes * 60 * 1000);
+  }, currentIntervalMinutes * 60 * 1000);
+  
+  nextRunTime = new Date(Date.now() + currentIntervalMinutes * 60 * 1000);
+  
+  res.json({ success: true, message: "Daemon started successfully." });
+});
+
+// 8. POST /api/daemon/stop - Stop the background caching daemon
+app.post("/api/daemon/stop", (req, res) => {
+  if (!isDaemonRunning) {
+    return res.json({ success: true, message: "Daemon is not running." });
+  }
+  clearInterval(autoRefreshInterval);
+  autoRefreshInterval = null;
+  isDaemonRunning = false;
+  nextRunTime = null;
+  logDaemon("Daemon stopped.");
+  sendSystemNotification("🛑 [Auto-Refresher] Background Caching Daemon stopped.");
+  res.json({ success: true, message: "Daemon stopped successfully." });
 });
 
 // Start listening

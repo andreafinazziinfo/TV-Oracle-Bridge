@@ -3,6 +3,7 @@ import json
 import subprocess
 from pathlib import Path
 import difflib
+import re
 
 # Ensure UTF-8 stdout on Windows to prevent UnicodeEncodeError
 if hasattr(sys.stdout, "reconfigure"):
@@ -101,17 +102,27 @@ def validate_pine_code(code: str) -> str:
     is_indicator = False
     is_strategy = False
     
+    # Common language keywords to ignore when checking function definitions
+    builtins_to_ignore = {
+        "if", "for", "while", "switch", "var", "varip", "array", "matrix", "map", 
+        "return", "int", "float", "bool", "color", "string", "line", "label", 
+        "box", "table", "polyline", "iff"
+    }
+    
     for idx, line in enumerate(lines):
         clean_line = line.strip()
         
-        # Check version declaration
-        if "//@version=" in clean_line:
-            has_version = True
-            try:
-                version_num = int(clean_line.split("=")[-1])
-            except ValueError:
-                warnings.append(f"Line {idx+1}: Malformed version declaration.")
-                
+        # Skip comment lines
+        if clean_line.startswith("//"):
+            # Check version declaration
+            if "//@version=" in clean_line:
+                has_version = True
+                try:
+                    version_num = int(clean_line.split("=")[-1])
+                except ValueError:
+                    warnings.append(f"Line {idx+1}: Malformed version declaration.")
+            continue
+            
         # Check indicator or strategy calls
         if "indicator(" in clean_line:
             is_indicator = True
@@ -134,6 +145,25 @@ def validate_pine_code(code: str) -> str:
         close_b = clean_line.count("]")
         if open_b != close_b:
             warnings.append(f"Line {idx+1}: Unmatched square brackets (open: {open_b}, close: {close_b}).")
+            
+        # Advanced check: Parse function calls
+        # Matches words like 'ta.ema(' or 'plot('
+        matches = re.findall(r'\b([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)?)\s*\(', clean_line)
+        for fn_call in matches:
+            if fn_call in builtins_to_ignore:
+                continue
+                
+            # If function belongs to a namespace or matches key plotting/input builtins
+            is_namespaced = "." in fn_call
+            is_builtin_func = fn_call in {"plot", "plotshape", "plotchar", "plotbar", "plotcandle", "hline", "fill", "alert", "alertcondition", "indicator", "strategy", "library", "input"}
+            
+            if is_namespaced or is_builtin_func:
+                # Check directly, or with parentheses appended (since crawler registers some as ta.rsi())
+                if fn_call not in PINE_DOCS_DATABASE and f"{fn_call}()" not in PINE_DOCS_DATABASE:
+                    # Suggest similar names
+                    similar = difflib.get_close_matches(fn_call, PINE_DOCS_DATABASE.keys(), n=2, cutoff=0.55)
+                    sug_str = f". Did you mean: {', '.join(f'`{s}`' for s in similar)}?" if similar else ""
+                    warnings.append(f"Line {idx+1}: Unknown or typo in function call '{fn_call}'{sug_str}")
             
     if not has_version:
         warnings.append("Warning: Missing version compiler directive. Recommend adding '//@version=5' or '//@version=6' at the top of your script.")

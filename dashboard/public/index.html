@@ -168,6 +168,39 @@
                 </li>
               </ul>
             </div>
+        </div>
+
+        <!-- Caching Daemon Auto-Refresher Control Panel -->
+        <div class="panel daemon-panel" style="margin-top: 30px;">
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <h2><i class="lucide-refresh-cw"></i> Background Caching Auto-Refresher</h2>
+              <p class="panel-subtitle">Schedules automated delta-syncing runs to keep SQLite data cached. Sends status reports via webhooks.</p>
+            </div>
+            <div class="daemon-controls" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+              <span class="badge" id="daemon-badge-val" style="padding: 6px 12px; font-weight: 700; background-color: rgba(255, 51, 102, 0.1); color: var(--neon-red); border: 1px solid rgba(255, 51, 102, 0.2);">Inactive</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label for="daemon-interval-input" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Interval (min):</label>
+                <input type="number" id="daemon-interval-input" value="15" min="1" style="width: 70px; padding: 6px 10px; font-size: 0.85rem; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+              </div>
+              <button id="daemon-start-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.8rem;"><i class="lucide-play"></i> Start Daemon</button>
+              <button id="daemon-stop-btn" class="btn btn-secondary hidden" style="padding: 8px 16px; font-size: 0.8rem; border-color: var(--neon-red); color: var(--neon-red);"><i class="lucide-square"></i> Stop Daemon</button>
+            </div>
+          </div>
+          <div class="panel-body" style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="daemon-info-row" style="display: flex; gap: 20px; font-size: 0.9rem; color: var(--text-muted); flex-wrap: wrap;">
+              <span>Next cycle schedule: <strong id="daemon-next-run-val" class="text-green">-</strong></span>
+              <span>•</span>
+              <span>Webhooks status: <strong id="daemon-notifiers-val" class="text-green">Checking...</strong></span>
+            </div>
+            <!-- Daemon Console Output -->
+            <div class="downloader-console" style="margin-top: 10px;">
+              <div class="console-header">
+                <span class="console-title" style="font-size: 0.75rem;">Daemon Logs</span>
+                <button id="daemon-clear-logs" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.65rem; border-color: var(--border-color);"><i class="lucide-trash-2" style="font-size: 0.75rem;"></i> Clear Console</button>
+              </div>
+              <pre id="daemon-log-box" class="console-log" style="max-height: 180px; font-size: 0.75rem; color: #a5f3fc;">No activity logs...</pre>
+            </div>
           </div>
         </div>
       </section>
