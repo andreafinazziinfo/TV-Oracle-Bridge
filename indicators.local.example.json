@@ -1,0 +1,23 @@
+{
+  "_note": "Rename this file to indicators.local.json and fill in your private TradingView indicator pineIds and versions.",
+  "completa": {
+    "pineId": "USER;your_completa_pine_id_here",
+    "version": "630.0"
+  },
+  "model_entry": {
+    "pineId": "USER;your_model_entry_pine_id_here",
+    "version": "83.0"
+  },
+  "pattern_matching": {
+    "pineId": "USER;your_pattern_matching_pine_id_here",
+    "version": "27.0"
+  },
+  "data_science": {
+    "pineId": "USER;your_data_science_pine_id_here",
+    "version": "131.0"
+  },
+  "tre_cicli": {
+    "pineId": "USER;your_tre_cicli_pine_id_here",
+    "version": "105.0"
+  }
+}

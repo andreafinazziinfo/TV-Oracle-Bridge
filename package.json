@@ -1,0 +1,16 @@
+{
+  "name": "tv-oracle-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline TradingView indicator oracle and FastMCP Server",
+  "scripts": {
+    "list": "node listIndicators.mjs",
+    "fetch": "node fetchIndicator.mjs",
+    "postinstall": "node apply-lib-patch.mjs"
+  },
+  "dependencies": {
+    "@mathieuc/tradingview": "^3.5.0",
+    "dotenv": "^16.4.5"
+  }
+}
