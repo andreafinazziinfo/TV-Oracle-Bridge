@@ -25,6 +25,11 @@
 * 🕯️ **Candlestick Pattern Scanning**: Scan historical bars for patterns like Hammer, Doji, and Engulfing to generate immediate signal reports (`python pattern_detector.py`).
 * 🤖 **AI Agent Integration**: Expose all these features directly to Claude Desktop or other AI clients using built-in FastMCP tools.
 
+### 📸 Chart Screenshot Preview
+Here is an example of a high-resolution chart snapshot captured programmatically using the built-in browser controller:
+
+![TradingView Chart Screenshot](docs/images/screenshot_sample.png)
+
 ---
 
 ## 🗺️ System Architecture
@@ -64,15 +69,18 @@ graph TD
 
 ---
 
-## ✨ Key Features
+## ✨ Codebase Breakdown (How it Works)
 
-* 📊 **Full Graphic Materialization**: Extracts study drawings (`study.periods`, lines, labels, boxes, and table cells) which standard CSV exports miss.
-* 📷 **Visual Chart Screenshots (Chart Vision)**: Allows AI agents to visually inspect indicator drawings on the actual chart using a headless or visible browser instance.
-* 📈 **Strategy Performance Tracking**: Extracts `strategyReport` (trades, prices, execution times, performance metrics) for strategy-type scripts.
-* 🔍 **Real-Time Technical Scanner**: Queries TradingView's scanner engine to find assets matching custom criteria.
-* 🕯️ **Candlestick Pattern Classifier**: Analyzes historical OHLC data to detect key Japanese candlestick formations.
-* 🛡️ **Zero-Drift Candles**: Captures the exact historical candles (`chartOhlc`) used for computations to ensure 100% mathematical parity.
-* 🔒 **Zero-Leak Security**: Automatically splits public configurations from private indicators/sessions.
+This standalone project integrates multiple components to bridge the gap between TradingView's client-side runtime and your local python/agentic environment:
+
+1. **`fetchIndicator.mjs` (WebSocket Extractor)**: Connects to TradingView's WebSocket feed using `@mathieuc/tradingview`. It acts as an offline "oracle" by subscribing to the indicator's raw data stream, materializing complex graphic objects (like lines, labels, boxes, and table cells) which are normally unavailable in CSV exports.
+2. **`remoteControl.mjs` (Browser Automator)**: Uses Playwright to launch a browser session (supporting local Brave, Chrome, or default Chromium/Firefox/WebKit). It injects session cookies, navigates to chart layouts, executes commands (like changing symbols, toggling drawings, or saving files), and captures crisp PNG screenshots.
+3. **`screener.py` (Market Scanner)**: Queries TradingView's official JSON scanner endpoints to search for assets matching custom technical setups (such as RSI oversold or high-volume breakouts) and formats the output into clean markdown tables.
+4. **`pattern_detector.py` (Candlestick Classifier)**: An offline analysis script that parses historical OHLC bars fetched by the oracle and identifies classic price patterns (Doji, Hammer, Engulfing).
+5. **`pine_docs.py` (AI Syntax Help)**: Provides a local database of official Pine Script v5/v6 functions, arguments, and linting rules, helping AI agents write syntactically correct code.
+6. **`pineTranspilerWrapper.mjs` (Safe TS Transpiler)**: Runs LuxAlgo's `@luxalgo/pinets` compiler in a separate CLI process. This keeps the main project 100% legally independent of copyleft AGPL-3.0 licenses.
+7. **`mcp_server.py` (FastMCP Gateway)**: Exposes all these tools under the Model Context Protocol, allowing local AI agents (like Claude Desktop) to invoke them interactively.
+8. **`Dockerfile` & `docker-compose.yml` (Docker Stack)**: Containerizes the entire Node.js + Python + Playwright runtime using Microsoft's preconfigured system libraries for headless browser rendering, allowing 24/7 background deployment.
 
 ---
 
@@ -82,6 +90,7 @@ graph TD
 Ensure you have the following installed:
 * [Node.js](https://nodejs.org/) `>= 18.0.0`
 * [Python](https://python.org/) `>= 3.10`
+* [Docker](https://www.docker.com/) *(optional, for containerized deployment)*
 
 ### 2. Installation
 Clone the repository and install the Node.js and Python dependencies:
@@ -105,7 +114,7 @@ Open `.env` and fill in your TradingView session credentials:
 *Optional Browser Configuration (e.g., to use your local Brave Browser installation)*:
 ```ini
 TV_BROWSER_TYPE=chromium
-TV_BROWSER_PATH=C:/path/to/Brave-Browser/Application/brave.exe
+TV_BROWSER_PATH=C:/Users/Andrea/AppData/Local/BraveSoftware/Brave-Browser/Application/brave.exe
 TV_BROWSER_HEADLESS=true
 ```
 
@@ -195,8 +204,12 @@ python mcp_server.py
 1. `fetch_indicator`: Fetch indicator outputs & strategy logs from WebSocket.
 2. `list_indicators`: Enumerate user's private indicators.
 3. `capture_screenshot`: Take visual chart screenshots (uses Playwright + Brave/Chrome).
-4. `run_screener`: Scan markets for specific technical states.
-5. `detect_patterns`: Classify candlestick setups on historical OHLC bars.
+4. `control_chart_macro`: Execute a remote macro on the active chart layout (change symbol, toggle drawings, save).
+5. `run_screener`: Scan markets for specific technical states.
+6. `detect_patterns`: Classify candlestick setups on historical OHLC bars.
+7. `get_pine_docs`: Get syntax guidelines for Pine Script functions.
+8. `validate_pine_code`: Run static linting checks on custom Pine code.
+9. `transpile_pine_script`: Compiles Pine code into local JS using the AGPL-safe wrapper.
 
 ### Configuration for Claude Desktop (`claude_desktop_config.json`):
 ```json
