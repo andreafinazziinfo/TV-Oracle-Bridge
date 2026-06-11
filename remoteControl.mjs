@@ -50,13 +50,88 @@ export async function launchBrowser() {
 }
 
 /**
+ * Draw visual annotations on the screenshot using Chromium's HTML5 Canvas.
+ */
+async function annotateScreenshot(browser, imagePath, annotations) {
+  if (!annotations || annotations.length === 0) return;
+  console.log(`[Annotator] Drawing ${annotations.length} overlays on screenshot...`);
+  
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  
+  const fileData = fs.readFileSync(imagePath);
+  const base64Data = fileData.toString("base64");
+  const imgDataUrl = `data:image/png;base64,${base64Data}`;
+  
+  const pageContent = `
+    <html>
+      <body style="margin:0; padding:0; overflow:hidden;">
+        <canvas id="canvas"></canvas>
+        <script>
+          window.canvasDrawn = false;
+          const img = new Image();
+          img.src = "${imgDataUrl}";
+          img.onload = () => {
+            const canvas = document.getElementById("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            
+            const annotations = ${JSON.stringify(annotations)};
+            const chartStart = 60;
+            const chartEnd = img.width - 90;
+            const chartWidth = chartEnd - chartStart;
+            const totalBars = 80;
+            const barWidth = chartWidth / totalBars;
+            
+            annotations.forEach(ann => {
+              const i = ann.barIndexFromRight;
+              const x = chartEnd - (i * barWidth) - (barWidth / 2);
+              
+              ctx.fillStyle = ann.color || "rgba(255, 0, 0, 0.15)";
+              ctx.fillRect(x - barWidth/2, 50, barWidth, img.height - 100);
+              
+              ctx.strokeStyle = ann.borderColor || "rgba(255, 0, 0, 0.6)";
+              ctx.lineWidth = 2;
+              ctx.strokeRect(x - barWidth/2, 50, barWidth, img.height - 100);
+              
+              const text = ann.label || "Alert";
+              ctx.font = "bold 13px sans-serif";
+              const textWidth = ctx.measureText(text).width;
+              
+              ctx.fillStyle = ann.borderColor || "rgba(255, 0, 0, 0.8)";
+              ctx.fillRect(x - textWidth/2 - 5, 20, textWidth + 10, 24);
+              
+              ctx.fillStyle = "#ffffff";
+              ctx.textAlign = "center";
+              ctx.fillText(text, x, 36);
+            });
+            window.canvasDrawn = true;
+          };
+        </script>
+      </body>
+    </html>
+  `;
+  
+  await page.setContent(pageContent);
+  await page.waitForFunction(() => window.canvasDrawn === true);
+  
+  const canvasEl = await page.$("canvas");
+  await canvasEl.screenshot({ path: imagePath });
+  console.log(`[Annotator] Screenshot overwritten with annotations.`);
+  await context.close();
+}
+
+/**
  * Capture a visual screenshot of a TradingView chart.
  * 
  * @param {string} symbol - E.g. "BINANCE:BTCUSDT"
  * @param {string} timeframe - E.g. "60" (minutes), "D" (day)
  * @param {string} outputName - E.g. "chart_btc.png"
+ * @param {Array} annotations - Array of { barIndexFromRight: int, color: string, label: string }
  */
-export async function captureChartScreenshot(symbol = "", timeframe = "", outputName = "screenshot.png") {
+export async function captureChartScreenshot(symbol = "", timeframe = "", outputName = "screenshot.png", annotations = []) {
   const session = (process.env.TV_SESSION || "").trim();
   const signature = (process.env.TV_SESSION_SIGN || "").trim();
   const targetSymbol = symbol || process.env.TV_SYMBOL || "BINANCE:BTCUSDT";
@@ -131,6 +206,15 @@ export async function captureChartScreenshot(symbol = "", timeframe = "", output
   console.log("Capturing screenshot...");
   await page.screenshot({ path: outputPath, fullPage: false });
   console.log(`Screenshot saved successfully to: ${outputPath}`);
+
+  // Apply overlays if annotations are provided
+  if (annotations && annotations.length > 0) {
+    try {
+      await annotateScreenshot(browser, outputPath, annotations);
+    } catch (annErr) {
+      console.error("[Annotator] Annotation failed:", annErr.message);
+    }
+  }
 
   await context.close();
   await browser.close();
@@ -232,8 +316,16 @@ if (process.argv[1] && process.argv[1].endsWith("remoteControl.mjs")) {
   const name = process.argv[5] || "manual_capture.png";
 
   if (action === "screenshot") {
-    console.log(`Starting manual screenshot: symbol=${sym || "default"}, timeframe=${tf || "default"}`);
-    captureChartScreenshot(sym, tf, name)
+    const annotationsJson = process.argv[6] || "[]";
+    let annotations = [];
+    try {
+      annotations = JSON.parse(annotationsJson);
+    } catch (e) {
+      console.error("Failed to parse annotations JSON:", e.message);
+    }
+    
+    console.log(`Starting manual screenshot: symbol=${sym || "default"}, timeframe=${tf || "default"}, annotations=${annotations.length}`);
+    captureChartScreenshot(sym, tf, name, annotations)
       .then((path) => console.log(`Done! Path: ${path}`))
       .catch((err) => {
         console.error("Failed to capture screenshot:", err);

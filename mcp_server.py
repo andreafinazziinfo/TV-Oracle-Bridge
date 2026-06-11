@@ -17,12 +17,14 @@ ORACLE_DIR = Path(__file__).parent.resolve()
 # Add local path to sys.path to ensure correct imports
 sys.path.append(str(ORACLE_DIR))
 from screener import run_screener as exec_screener
-from pattern_detector import detect_from_oracle_file
+from pattern_detector import detect_from_oracle_file, get_candlestick_annotations
 from pine_docs import get_pine_docs as fetch_pine_docs, validate_pine_code as check_pine_syntax
+from tv_cache import get_last_cached_timestamp, merge_and_update_cache, get_cached_bars
+
 
 @mcp.tool()
 def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int = 20000) -> str:
-    """Fetch an indicator's computed output from TradingView.
+    """Fetch an indicator's computed output from TradingView, leveraging local SQLite cache.
     
     Args:
         key: The indicator key from indicators.json (e.g. "completa", "model_entry", "pattern_matching").
@@ -30,6 +32,19 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         wait_ms: Streaming wait time in milliseconds before snapshotting (default: 20000).
     """
     try:
+        symbol = os.getenv("TV_SYMBOL", "BINANCE:BTCUSDT")
+        timeframe = os.getenv("TV_TIMEFRAME", "60")
+        
+        # Check if we already have cached bars to enable delta synchronization
+        last_timestamp = get_last_cached_timestamp(key, symbol, timeframe)
+        is_delta_sync = False
+        
+        if last_timestamp > 0:
+            print(f"[SQLite Cache] Found last cached timestamp: {last_timestamp}. Enabling delta-sync (last 100 bars).")
+            range_val = 100
+            wait_ms = min(wait_ms, 8000) # Reduce stream wait time for speed
+            is_delta_sync = True
+            
         # Run node fetchIndicator.mjs
         cmd = ["node", "fetchIndicator.mjs", key, str(range_val), str(wait_ms)]
         result = subprocess.run(
@@ -45,18 +60,22 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         if not out_file.exists():
             return f"Error: Indicator fetched but output file {out_file} not found. Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
             
-        # Read file and return summarized version to prevent token explosion
+        # Read the fresh fetched data
         with open(out_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            fresh_data = json.load(f)
             
+        # Merge fresh data with SQLite history and rewrite out/<key>.json
+        merged_data = merge_and_update_cache(key, symbol, timeframe, fresh_data)
+        
         summary = {
-            "meta": data.get("meta"),
-            "plots": data.get("plots"),
-            "graphicSummary": data.get("graphicSummary"),
-            "periodsCount": data.get("periodsCount"),
-            "strategyReport": data.get("strategyReport"),
-            "periodsSample": data.get("periodsSample", [])[-3:], # last 3 periods
-            "output_path": str(out_file)
+            "meta": merged_data.get("meta"),
+            "plots": merged_data.get("plots"),
+            "graphicSummary": merged_data.get("graphicSummary"),
+            "periodsCount": merged_data.get("periodsCount"),
+            "strategyReport": merged_data.get("strategyReport"),
+            "periodsSample": merged_data.get("periodsSample", [])[-3:], # last 3 periods
+            "output_path": str(out_file),
+            "delta_sync": is_delta_sync
         }
         return json.dumps(summary, indent=2)
         
@@ -93,7 +112,18 @@ def capture_screenshot(symbol: str = "BINANCE:BTCUSDT", timeframe: str = "60", n
         name: Name of the output image file saved in out/screenshots/.
     """
     try:
-        cmd = ["node", "remoteControl.mjs", "screenshot", symbol, timeframe, name]
+        # Load the latest cached bars for the symbol/timeframe using tv_cache.get_cached_bars
+        # using the default "completa" indicator key
+        periods, ohlc = get_cached_bars("completa", symbol, timeframe)
+        annotations_json = "[]"
+        if ohlc:
+            annotations = get_candlestick_annotations(ohlc)
+            annotations_json = json.dumps(annotations)
+            print(f"[Screenshot Tool] Found {len(ohlc)} cached bars. Generated {len(annotations)} annotations.")
+        else:
+            print(f"[Screenshot Tool] No cached bars found for {symbol} ({timeframe}). Capturing clean screenshot.")
+            
+        cmd = ["node", "remoteControl.mjs", "screenshot", symbol, timeframe, name, annotations_json]
         result = subprocess.run(
             cmd,
             cwd=str(ORACLE_DIR),
@@ -109,6 +139,39 @@ def capture_screenshot(symbol: str = "BINANCE:BTCUSDT", timeframe: str = "60", n
         return f"Success: Screenshot saved to {screenshot_path}\nStdout:\n{result.stdout}"
     except subprocess.CalledProcessError as e:
         return f"Error running screenshot automation: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@mcp.tool()
+def refresh_session_credentials() -> str:
+    """Launch an interactive browser window to refresh TradingView session cookies.
+    
+    This opens a new terminal window to prompt you for authentication steps and updates the local .env.
+    """
+    try:
+        if sys.platform == "win32":
+            print("[Session Helper] Spawning interactive terminal window on Windows...")
+            # We use 'start /wait' to open a new command prompt and wait for the user to complete login.
+            cmd = ["cmd.exe", "/c", "start", "/wait", "node", "session_helper.mjs"]
+            result = subprocess.run(
+                cmd,
+                cwd=str(ORACLE_DIR),
+                check=True
+            )
+            return "Success: Session refresher finished. Check if your .env file has been updated with new TV_SESSION."
+        else:
+            # Fallback for non-Windows (or if user runs manually)
+            cmd = ["node", "session_helper.mjs"]
+            result = subprocess.run(
+                cmd,
+                cwd=str(ORACLE_DIR),
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return f"Success: Session refresher completed.\nStdout:\n{result.stdout}"
+    except subprocess.CalledProcessError as e:
+        return f"Error running session helper: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
     except Exception as e:
         return f"Error: {e}"
 

@@ -121,6 +121,80 @@ def detect_from_oracle_file(file_path: str) -> str:
     except Exception as e:
         return f"Error parsing oracle file: {str(e)}"
 
+def get_candlestick_annotations(ohlc: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Detect key patterns on the last 15 bars and return Playwright-compatible annotation objects."""
+    if not ohlc or len(ohlc) < 3:
+        return []
+        
+    bars_to_analyze = ohlc[-15:]
+    annotations = []
+    
+    for i in range(1, len(bars_to_analyze)):
+        curr = bars_to_analyze[i]
+        prev = bars_to_analyze[i-1]
+        
+        body = abs(curr["close"] - curr["open"])
+        candle_range = curr["high"] - curr["low"]
+        if candle_range == 0:
+            continue
+            
+        body_pct = body / candle_range
+        upper_shadow = curr["high"] - max(curr["close"], curr["open"])
+        lower_shadow = min(curr["close"], curr["open"]) - curr["low"]
+        
+        is_bullish = curr["close"] > curr["open"]
+        is_bearish = curr["close"] < curr["open"]
+        
+        prev_body = abs(prev["close"] - prev["open"])
+        
+        bar_idx_from_right = len(bars_to_analyze) - 1 - i
+        
+        # Color palettes
+        c_green = "rgba(16, 185, 129, 0.15)"
+        b_green = "rgb(16, 185, 129)"
+        c_red = "rgba(239, 68, 68, 0.15)"
+        b_red = "rgb(239, 68, 68)"
+        c_yellow = "rgba(245, 158, 11, 0.15)"
+        b_yellow = "rgb(245, 158, 11)"
+        
+        if body_pct < 0.10:
+            annotations.append({
+                "barIndexFromRight": bar_idx_from_right,
+                "color": c_yellow,
+                "borderColor": b_yellow,
+                "label": "Doji"
+            })
+        elif lower_shadow > (2 * body) and upper_shadow < (0.2 * body) and body_pct > 0.10 and body_pct < 0.40:
+            annotations.append({
+                "barIndexFromRight": bar_idx_from_right,
+                "color": c_green if is_bullish else c_red,
+                "borderColor": b_green if is_bullish else b_red,
+                "label": "Hammer" if is_bullish else "Hanging Man"
+            })
+        elif upper_shadow > (2 * body) and lower_shadow < (0.2 * body) and body_pct > 0.10 and body_pct < 0.40:
+            annotations.append({
+                "barIndexFromRight": bar_idx_from_right,
+                "color": c_red if is_bearish else c_green,
+                "borderColor": b_red if is_bearish else b_green,
+                "label": "Shooting Star" if is_bearish else "Inverted Hammer"
+            })
+        elif is_bullish and prev["close"] < prev["open"] and curr["open"] <= prev["close"] and curr["close"] >= prev["open"] and body > prev_body:
+            annotations.append({
+                "barIndexFromRight": bar_idx_from_right,
+                "color": c_green,
+                "borderColor": b_green,
+                "label": "Bullish Engulfing"
+            })
+        elif is_bearish and prev["close"] > prev["open"] and curr["open"] >= prev["close"] and curr["close"] <= prev["open"] and body > prev_body:
+            annotations.append({
+                "barIndexFromRight": bar_idx_from_right,
+                "color": c_red,
+                "borderColor": b_red,
+                "label": "Bearish Engulfing"
+            })
+              
+    return annotations
+
 if __name__ == "__main__":
     import sys
     path = sys.argv[1] if len(sys.argv) > 1 else "out/completa.json"
