@@ -16,6 +16,17 @@
 
 ---
 
+## 🎯 Quick Capabilities (What You Can Do)
+
+* 📡 **Fetch Indicator Data**: Download computed plots, lines, tables, and strategy trade reports directly into JSON files (`npm run fetch`).
+* 📜 **List Private Indicators**: Enumerate all private/invite-only indicators saved under your TradingView account (`npm run list`).
+* 📸 **Capture Chart Screenshots**: Programmatically open your charts (supporting **Brave**, Chrome, Firefox, Safari) and take high-resolution PNG snapshots (`node remoteControl.mjs`).
+* 🔍 **Market Technical Screening**: Scan global markets (Crypto, Forex, Stocks) for specific technical conditions like RSI oversold/overbought or top volume (`python screener.py`).
+* 🕯️ **Candlestick Pattern Scanning**: Scan historical bars for patterns like Hammer, Doji, and Engulfing to generate immediate signal reports (`python pattern_detector.py`).
+* 🤖 **AI Agent Integration**: Expose all these features directly to Claude Desktop or other AI clients using built-in FastMCP tools.
+
+---
+
 ## 🗺️ System Architecture
 
 The **TV Oracle Bridge** connects to TradingView's secure WebSockets, streams computed indicator periods/plots and drawing tables, and exposes them locally via a unified JSON format or a **Model Context Protocol (MCP)** server.
@@ -34,6 +45,7 @@ graph TD
     subgraph TV Oracle Bridge [Local Machine]
         B["FastMCP Server (mcp_server.py)"]:::server
         C["Extractor Engine (fetchIndicator.mjs)"]:::server
+        E["Playwright Automation (remoteControl.mjs)"]:::server
     end
     
     subgraph External Oracle
@@ -43,6 +55,8 @@ graph TD
     %% Connections
     A <-->|Model Context Protocol| B
     B <-->|Subprocess Runner| C
+    B <-->|Automates Browser| E
+    E <-->|Injected Cookies| D
     C <-->|Secured WebSockets| D
     D -->|Real-time Plots, Tables & Graphics| C
     C -->|Sanitized JSON Data| B
@@ -53,9 +67,11 @@ graph TD
 ## ✨ Key Features
 
 * 📊 **Full Graphic Materialization**: Extracts study drawings (`study.periods`, lines, labels, boxes, and table cells) which standard CSV exports miss.
+* 📷 **Visual Chart Screenshots (Chart Vision)**: Allows AI agents to visually inspect indicator drawings on the actual chart using a headless or visible browser instance.
 * 📈 **Strategy Performance Tracking**: Extracts `strategyReport` (trades, prices, execution times, performance metrics) for strategy-type scripts.
+* 🔍 **Real-Time Technical Scanner**: Queries TradingView's scanner engine to find assets matching custom criteria.
+* 🕯️ **Candlestick Pattern Classifier**: Analyzes historical OHLC data to detect key Japanese candlestick formations.
 * 🛡️ **Zero-Drift Candles**: Captures the exact historical candles (`chartOhlc`) used for computations to ensure 100% mathematical parity.
-* 🤖 **Native FastMCP Tools**: Exposes tools to agentic platforms like Claude for direct indicator queries.
 * 🔒 **Zero-Leak Security**: Automatically splits public configurations from private indicators/sessions.
 
 ---
@@ -86,6 +102,13 @@ Open `.env` and fill in your TradingView session credentials:
 * `TV_SESSION`: The value of your `sessionid` cookie.
 * `TV_SESSION_SIGN`: The value of your `sessionid_sign` cookie.
 
+*Optional Browser Configuration (e.g., to use your local Brave Browser installation)*:
+```ini
+TV_BROWSER_TYPE=chromium
+TV_BROWSER_PATH=C:/path/to/Brave-Browser/Application/brave.exe
+TV_BROWSER_HEADLESS=true
+```
+
 > 🔍 **How to get cookies**: Log in to `tradingview.com`, open Developer Tools (`F12`), go to **Application** -> **Cookies** -> `https://www.tradingview.com`, and find `sessionid`.
 
 ### 4. Config Private Indicators (`indicators.local.json`)
@@ -112,8 +135,8 @@ Edit `indicators.local.json` and insert your invite-only or private indicator ID
 
 ## 🛠️ Usage Guide
 
-### Fetching Indicator Data
-Extract data directly into the `out/` folder:
+### 1. Fetching Indicator Data
+Extract computed values directly into the `out/` folder:
 ```bash
 node fetchIndicator.mjs <key> [range] [waitMs]
 ```
@@ -126,13 +149,56 @@ Example:
 node fetchIndicator.mjs completa 5000 20000
 ```
 
-### Running the MCP Server
-Launch the server to expose tools to your AI agent:
+### 2. Capturing Chart Screenshots
+Take high-resolution snapshots of your chart layouts:
+```bash
+node remoteControl.mjs screenshot <symbol> <timeframe> [output_name.png]
+```
+Example:
+```bash
+node remoteControl.mjs screenshot BINANCE:BTCUSDT 60 btc_chart.png
+```
+
+### 3. Running the Technical Screener
+Scan technical setups across different markets:
+```bash
+python screener.py <market> <condition> [limit]
+```
+* **`market`**: `crypto`, `forex`, `america` (stocks).
+* **`condition`**: `top_volume`, `top_gainers`, `oversold` (RSI < 30), `overbought` (RSI > 70).
+
+Example:
+```bash
+python screener.py crypto oversold 15
+```
+
+### 4. Scanning Candlestick Patterns
+Detect candlestick patterns on historical price data:
+```bash
+python pattern_detector.py [path_to_fetched_json_file]
+```
+Example:
+```bash
+python pattern_detector.py out/completa.json
+```
+
+---
+
+## 🤖 Running the MCP Server
+
+Launch the FastMCP server to integrate these tools with your AI client (like Claude Desktop):
 ```bash
 python mcp_server.py
 ```
 
-To configure the bridge in **Claude Desktop**, edit `claude_desktop_config.json`:
+### Registered Tools Exposed to AI:
+1. `fetch_indicator`: Fetch indicator outputs & strategy logs from WebSocket.
+2. `list_indicators`: Enumerate user's private indicators.
+3. `capture_screenshot`: Take visual chart screenshots (uses Playwright + Brave/Chrome).
+4. `run_screener`: Scan markets for specific technical states.
+5. `detect_patterns`: Classify candlestick setups on historical OHLC bars.
+
+### Configuration for Claude Desktop (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
