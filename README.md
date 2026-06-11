@@ -18,12 +18,14 @@
 
 ## 🎯 Quick Capabilities (What You Can Do)
 
-* 📡 **Fetch Indicator Data**: Download computed plots, lines, tables, and strategy trade reports directly into JSON files (`npm run fetch`).
-* 📜 **List Private Indicators**: Enumerate all private/invite-only indicators saved under your TradingView account (`npm run list`).
-* 📸 **Capture Chart Screenshots**: Programmatically open your charts (supporting **Brave**, Chrome, Firefox, Safari) and take high-resolution PNG snapshots (`node remoteControl.mjs`).
-* 🔍 **Market Technical Screening**: Scan global markets (Crypto, Forex, Stocks) for specific technical conditions like RSI oversold/overbought or top volume (`python screener.py`).
-* 🕯️ **Candlestick Pattern Scanning**: Scan historical bars for patterns like Hammer, Doji, and Engulfing to generate immediate signal reports (`python pattern_detector.py`).
-* 🤖 **AI Agent Integration**: Expose all these features directly to Claude Desktop or other AI clients using built-in FastMCP tools.
+* 🖥️ **Interactive Web Dashboard**: Launch a premium dark-mode console on port `5000` to review database stats, browse screenshot libraries, search docs, download public scripts, and manage backends.
+* 🔄 **Automated Cache Daemon**: Schedule background delta-sync cycles to auto-refresher your indicators, reporting status via webhooks.
+* 📡 **Fetch Indicator Data**: Stream computed plots, strategy logs, and drawing tables into SQLite and JSON files (`npm run fetch`).
+* 📜 **List Private Indicators**: Discover and list private/invite-only indicators saved under your account (`npm run list`).
+* 📸 **Capture Chart Screenshots**: Save high-resolution chart PNGs with custom indicators and drawing overlays (`node remoteControl.mjs`).
+* 🔍 **Market Technical Screening**: Scan global crypto, forex, and stock symbols by technical states (`python screener.py`).
+* 🕯️ **Candlestick Pattern Scanner**: Detect pattern formations (Hammer, Engulfing, Doji) on historical feeds (`python pattern_detector.py`).
+* 🤖 **AI Agent Integration**: Expose all functionalities (including documentation autocomplete, spellchecker, and notifier) via FastMCP server gateway.
 
 ### 📸 Chart Screenshot Preview
 Here is an example of a high-resolution chart snapshot captured programmatically using the built-in browser controller:
@@ -73,14 +75,17 @@ graph TD
 
 This standalone project integrates multiple components to bridge the gap between TradingView's client-side runtime and your local python/agentic environment:
 
-1. **`fetchIndicator.mjs` (WebSocket Extractor)**: Connects to TradingView's WebSocket feed using `@mathieuc/tradingview`. It acts as an offline "oracle" by subscribing to the indicator's raw data stream, materializing complex graphic objects (like lines, labels, boxes, and table cells) which are normally unavailable in CSV exports.
-2. **`remoteControl.mjs` (Browser Automator)**: Uses Playwright to launch a browser session (supporting local Brave, Chrome, or default Chromium/Firefox/WebKit). It injects session cookies, navigates to chart layouts, executes commands (like changing symbols, toggling drawings, or saving files), and captures crisp PNG screenshots.
-3. **`screener.py` (Market Scanner)**: Queries TradingView's official JSON scanner endpoints to search for assets matching custom technical setups (such as RSI oversold or high-volume breakouts) and formats the output into clean markdown tables.
-4. **`pattern_detector.py` (Candlestick Classifier)**: An offline analysis script that parses historical OHLC bars fetched by the oracle and identifies classic price patterns (Doji, Hammer, Engulfing).
-5. **`pine_docs.py` (AI Syntax Help)**: Provides a local database of official Pine Script v5/v6 functions, arguments, and linting rules, helping AI agents write syntactically correct code.
-6. **`pineTranspilerWrapper.mjs` (Safe TS Transpiler)**: Runs LuxAlgo's `@luxalgo/pinets` compiler in a separate CLI process. This keeps the main project 100% legally independent of copyleft AGPL-3.0 licenses.
-7. **`mcp_server.py` (FastMCP Gateway)**: Exposes all these tools under the Model Context Protocol, allowing local AI agents (like Claude Desktop) to invoke them interactively.
-8. **`Dockerfile` & `docker-compose.yml` (Docker Stack)**: Containerizes the entire Node.js + Python + Playwright runtime using Microsoft's preconfigured system libraries for headless browser rendering, allowing 24/7 background deployment.
+1. **`fetchIndicator.mjs` (WebSocket Extractor)**: Connects to TradingView's WebSockets to stream computed indicator plots, strategies, tables, and drawing labels into local SQLite/JSON formats.
+2. **`remoteControl.mjs` (Browser Automator)**: Uses Playwright to launch browser sessions (e.g. Brave/Chrome), navigate charts, execute remote commands, download scripts, and capture screenshots.
+3. **`dashboard/` (Local Web Dashboard)**: Express backend (`server.mjs`) and SPA client (`public/`) offering status overviews, image sliders, indicator inspector, autocomplete docs search, script downloader panel, and daemon managers.
+4. **`notifier.py` (Webhook Notifier)**: Native Python module to dispatch text alerts and screenshot file attachments to Discord and Telegram.
+5. **`screener.py` (Market Scanner)**: Scans global tickers for volume spikes, oversold levels, and top gainers using official API scanners.
+6. **`pattern_detector.py` (Candlestick Classifier)**: Offline analyzer evaluating candlestick patterns (Doji, Hammer, Engulfing) on cached database bars.
+7. **`pine_docs.py` (Linter & Autocomplete)**: Offline Pine Script v5/v6 syntax checker featuring typo-correction suggestions via `difflib`.
+8. **`build_pine_docs.mjs` (Sitemap Crawler)**: Playwright sitemap scraper compiling documentation into a rich 800+ function database (`pine_docs_db.json`).
+9. **`pineTranspilerWrapper.mjs` (Safe TS Transpiler)**: Isolates `@luxalgo/pinets` compiler runs to maintain 100% license independence from AGPL-3.0.
+10. **`mcp_server.py` (FastMCP Gateway)**: Exposes all scraper, scanner, and control tools to local AI agents.
+11. **`Dockerfile` & `docker-compose.yml` (Docker Stack)**: Containerizes Node/Python/Playwright for simple multi-platform background deployment.
 
 ---
 
@@ -110,6 +115,11 @@ cp .env.example .env
 Open `.env` and fill in your TradingView session credentials:
 * `TV_SESSION`: The value of your `sessionid` cookie.
 * `TV_SESSION_SIGN`: The value of your `sessionid_sign` cookie.
+
+*Optional Webhook Notification Settings (for daemon logs & screenshots)*:
+* `TV_NOTIFIER_DISCORD_WEBHOOK`: Full URL of a Discord channel webhook.
+* `TV_NOTIFIER_TELEGRAM_TOKEN`: HTTP API Token from Telegram BotFather.
+* `TV_NOTIFIER_TELEGRAM_CHAT_ID`: Destination Chat ID for the Telegram bot.
 
 *Optional Browser Configuration (e.g., to use your local Brave Browser installation)*:
 ```ini
@@ -191,8 +201,27 @@ Example:
 python pattern_detector.py out/completa.json
 ```
 
----
+### 5. Running the Local Web Dashboard & Daemon
+Launch the premium web console to inspect indicator caches, view screenshots, look up documentation, download open-source scripts, and manage background caching refresher cycles:
+```bash
+npm run dashboard
+# or: node dashboard/server.mjs
+```
+Open your browser and navigate to **`http://localhost:5000`** to access:
+* **Overview & Status**: Review SQLite database stats, masked environment variable configuration, and control/monitor the **Background Caching Auto-Refresher Daemon** with live log streaming.
+* **Screenshot Gallery**: A visual drawer featuring a fullscreen lightbox slider for all captured chart layouts.
+* **Indicator Database**: Interactive explorer to inspect raw JSON parameters, inputs, and historical series records.
+* **Pine Script Docs**: Query a comprehensive dictionary of Pine Script v5/v6 functions, complete with parameter descriptions, examples, and syntax.
+* **Script Downloader**: Paste public TradingView script detail URLs to fetch and extract code formatting, saving the result under `out/downloads/`.
 
+### 6. Crawling Pine Docs
+To compile or refresh the local offline Pine Script docs database (`pine_docs_db.json`), run the optimized Playwright crawler:
+```bash
+node build_pine_docs.mjs
+```
+This script scans official sitemaps, resolves duplicates, and downloads structured function specifications (syntax, parameters, examples, return values) for 800+ unique identifiers.
+
+---
 ## 🤖 Running the MCP Server
 
 Launch the FastMCP server to integrate these tools with your AI client (like Claude Desktop):
@@ -210,6 +239,7 @@ python mcp_server.py
 7. `get_pine_docs`: Get syntax guidelines for Pine Script functions.
 8. `validate_pine_code`: Run static linting checks on custom Pine code.
 9. `transpile_pine_script`: Compiles Pine code into local JS using the AGPL-safe wrapper.
+10. `send_notification`: Dispatch text summaries and screenshot file attachments to Discord and Telegram.
 
 ### Configuration for Claude Desktop (`claude_desktop_config.json`):
 ```json

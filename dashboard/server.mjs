@@ -181,8 +181,8 @@ app.get("/api/docs", (req, res) => {
     const docsDb = JSON.parse(dbContent);
 
     if (!query) {
-      // Return a subset of documentation (first 30 entries)
-      const keys = Object.keys(docsDb).slice(0, 30);
+      // Return a subset of documentation (first 100 entries)
+      const keys = Object.keys(docsDb).slice(0, 100);
       const docs = {};
       keys.forEach(k => { docs[k] = docsDb[k]; });
       return res.json({ success: true, total: Object.keys(docsDb).length, docs });
@@ -198,7 +198,7 @@ app.get("/api/docs", (req, res) => {
       if (matchName || matchDesc) {
         matchedDocs[funcName] = details;
         count++;
-        if (count >= 50) break; // Limit search results to avoid sending massive payloads
+        if (count >= 150) break; // Limit search results to avoid sending massive payloads
       }
     }
 

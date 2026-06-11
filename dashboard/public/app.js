@@ -1,4 +1,4 @@
-// CycleQuant Terminal - Dashboard Client Engine
+// TV-Oracle-Bridge - Dashboard Client Engine
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation & State Management
   const navItems = document.querySelectorAll(".nav-item");
