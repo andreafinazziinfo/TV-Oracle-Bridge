@@ -138,9 +138,9 @@ To configure the bridge in **Claude Desktop**, edit `claude_desktop_config.json`
   "mcpServers": {
     "tv-oracle-bridge": {
       "command": "python",
-      "args": ["C:/Users/Andrea/dev/TV-Oracle-Bridge/mcp_server.py"],
+      "args": ["/path/to/TV-Oracle-Bridge/mcp_server.py"],
       "env": {
-        "PYTHONPATH": "C:/Users/Andrea/dev/TV-Oracle-Bridge"
+        "PYTHONPATH": "/path/to/TV-Oracle-Bridge"
       }
     }
   }

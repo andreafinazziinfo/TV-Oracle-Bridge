@@ -1,5 +1,5 @@
 // Enumerate the authenticated user's private/invite-only TradingView indicators.
-// Output: id + version + name, so we can target each Matassa indicator for the oracle.
+// Output: id + version + name, so we can target each private indicator for the oracle.
 // Run: npm run list
 import "dotenv/config";
 import TradingView from "@mathieuc/tradingview";

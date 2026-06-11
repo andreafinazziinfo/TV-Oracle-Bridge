@@ -15,7 +15,7 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
     """Fetch an indicator's computed output from TradingView.
     
     Args:
-        key: The indicator key from indicators.json (e.g. "completa", "statistica", "modello_entry").
+        key: The indicator key from indicators.json (e.g. "completa", "model_entry", "pattern_matching").
         range_val: Number of bars to load (default: 5000).
         wait_ms: Streaming wait time in milliseconds before snapshotting (default: 20000).
     """

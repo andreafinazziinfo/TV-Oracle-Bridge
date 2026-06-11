@@ -1,10 +1,10 @@
 {
-  "_note": "Maps Matassa indicators to their keys and descriptions. Private pineId and version mapping must be defined in indicators.local.json (not tracked).",
+  "_note": "Maps indicators to their keys and descriptions. Private pineId and version mapping must be defined in indicators.local.json (not tracked).",
   "indicators": [
-    { "key": "completa",         "name": "Matassa Completa" },
-    { "key": "model_entry",      "name": "Matassa Model Entry" },
-    { "key": "pattern_matching", "name": "Matassa Pattern Matching v2" },
-    { "key": "data_science",     "name": "Matassa Data Science" },
-    { "key": "tre_cicli",        "name": "Matassa 3 Cicli" }
+    { "key": "completa",         "name": "Indicator Completa" },
+    { "key": "model_entry",      "name": "Model Entry Strategy" },
+    { "key": "pattern_matching", "name": "Pattern Matching Study" },
+    { "key": "data_science",     "name": "Data Science Study" },
+    { "key": "tre_cicli",        "name": "3 Cycles Study" }
   ]
 }

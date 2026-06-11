@@ -1,4 +1,4 @@
-// Fetch a Matassa indicator's computed output from TradingView (the "oracle").
+// Fetch an indicator's computed output from TradingView (the "oracle").
 // Captures BOTH plot series (study.periods) AND chart drawings (study.graphic:
 // labels/lines/boxes/tables), which is what the CSV exports were missing.
 //
