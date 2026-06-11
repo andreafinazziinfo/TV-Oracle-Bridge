@@ -308,6 +308,111 @@ export async function executeChartMacro(symbol = "", interval = "", actionType =
   return { outputPath, screenshotName: name };
 }
 
+/**
+ * Navigate to a public TradingView script detail page, extract its Pine Script code,
+ * and save it to out/downloads/<outputName>.
+ */
+export async function downloadPublicScript(scriptUrl, outputName = "downloaded_script.pine") {
+  const browser = await launchBrowser();
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 }
+  });
+  const page = await context.newPage();
+  
+  console.log(`[Downloader] Navigating to public script: ${scriptUrl}`);
+  await page.goto(scriptUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+  
+  // Wait for the page code element or state to load
+  console.log("[Downloader] Waiting for code element...");
+  
+  let codeText = "";
+  try {
+    await page.waitForTimeout(5000); // Wait for React hydration
+    
+    // Click "Source code" tab to load the code in DOM
+    console.log("[Downloader] Clicking Source code tab...");
+    await page.evaluate(() => {
+      const elements = Array.from(document.querySelectorAll("button, a, span, div"));
+      const srcBtn = elements.find(el => el.textContent && el.textContent.trim().toLowerCase() === "source code");
+      if (srcBtn) {
+        srcBtn.click();
+      }
+    });
+    await page.waitForTimeout(2000); // Wait for code panel to open
+    
+    // Attempt DOM-based source code extraction
+    codeText = await page.evaluate(() => {
+      // Look for standard code elements first, skipping line number containers
+      const elements = Array.from(document.querySelectorAll("pre, code, textarea, div.tv-script-details__code, .script-code, [class*='code'], [class*='source']"));
+      for (const el of elements) {
+        const className = (el.className || "").toString();
+        if (className.includes("Container") || className.includes("num") || className.includes("line")) {
+          continue;
+        }
+        const txt = el.innerText || el.textContent || "";
+        const hasPineKeywords = txt.includes("//@version=") || txt.includes("study(") || txt.includes("indicator(") || txt.includes("strategy(") || txt.includes("library(");
+        if (hasPineKeywords && txt.length > 100) {
+          return txt;
+        }
+      }
+      
+      // Fallback 1: search body text for Pine-like blocks
+      const bodyText = document.body.innerText || "";
+      const match = bodyText.match(/(\/\/@version=|study\(|indicator\(|strategy\()[\s\S]+/);
+      if (match) {
+        return match[0];
+      }
+      return "";
+    });
+    
+    // Fallback 2: Check global script tags for json-state sourceCode
+    if (!codeText) {
+      codeText = await page.evaluate(() => {
+        const scripts = Array.from(document.querySelectorAll("script"));
+        for (const s of scripts) {
+          const txt = s.textContent || "";
+          if (txt.includes("sourceCode") && (txt.includes("//@version") || txt.includes("study(") || txt.includes("indicator("))) {
+            const match = txt.match(/"sourceCode"\s*:\s*"([^"]+)"/);
+            if (match) {
+              try {
+                return JSON.parse(`"${match[1]}"`);
+              } catch (e) {
+                // Decode manually if JSON parse fails
+                return match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+              }
+            }
+          }
+        }
+        return "";
+      });
+    }
+    
+    // Clean up non-breaking spaces and line-endings
+    if (codeText) {
+      codeText = codeText.replace(/\u00a0/g, " ").replace(/\r\n/g, "\n");
+    }
+  } catch (err) {
+    console.error("[Downloader] Error evaluating script page:", err.message);
+  }
+  
+  await context.close();
+  await browser.close();
+  
+  if (!codeText) {
+    throw new Error("Could not find Pine Script code block starting with '//@version=' on the page. Ensure the script is open-source and has public code visibility.");
+  }
+  
+  const outDir = path.resolve("./out/downloads");
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
+  
+  const outputPath = path.join(outDir, outputName);
+  fs.writeFileSync(outputPath, codeText, "utf8");
+  console.log(`[Downloader] Script saved successfully to: ${outputPath}`);
+  return outputPath;
+}
+
 // Self-run capability for manual command line execution
 if (process.argv[1] && process.argv[1].endsWith("remoteControl.mjs")) {
   const action = process.argv[2] || "screenshot";
@@ -339,6 +444,16 @@ if (process.argv[1] && process.argv[1].endsWith("remoteControl.mjs")) {
       .then((res) => console.log(`Done! Screenshot saved to: ${res.outputPath}`))
       .catch((err) => {
         console.error("Macro failed:", err);
+        process.exit(1);
+      });
+  } else if (action === "download") {
+    const urlVal = process.argv[3];
+    const outName = process.argv[4] || "downloaded.pine";
+    console.log(`Starting manual public script download: url=${urlVal}, output=${outName}`);
+    downloadPublicScript(urlVal, outName)
+      .then((path) => console.log(`Done! Path: ${path}`))
+      .catch((err) => {
+        console.error("Download failed:", err);
         process.exit(1);
       });
   }

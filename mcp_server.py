@@ -237,6 +237,30 @@ def transpile_pine_script(file_path: str) -> str:
         return f"Error: {e}"
 
 @mcp.tool()
+def download_public_script(script_url: str, output_name: str = "downloaded_script.pine") -> str:
+    """Download the source code of an open-source TradingView public script.
+    
+    Args:
+        script_url: The public TradingView script URL (e.g. 'https://www.tradingview.com/script/XXXX-Name/').
+        output_name: The output filename to save the .pine code to.
+    """
+    try:
+        cmd = ["node", "remoteControl.mjs", "download", script_url, output_name]
+        result = subprocess.run(
+            cmd,
+            cwd=str(ORACLE_DIR),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        dest_path = ORACLE_DIR / "out" / "downloads" / output_name
+        return f"Success: Script downloaded successfully and saved to {dest_path}\nStdout:\n{result.stdout}"
+    except subprocess.CalledProcessError as e:
+        return f"Error downloading script: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@mcp.tool()
 def control_chart_macro(action_type: str = "save", value: str = "", symbol: str = "", interval: str = "") -> str:
     """Execute a remote control macro on the active TradingView chart (change symbol, toggle drawings, or save layout).
     

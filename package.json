@@ -7,11 +7,14 @@
   "scripts": {
     "list": "node listIndicators.mjs",
     "fetch": "node fetchIndicator.mjs",
+    "dashboard": "node dashboard/server.mjs",
     "postinstall": "node apply-lib-patch.mjs"
   },
   "dependencies": {
     "@mathieuc/tradingview": "^3.5.0",
     "dotenv": "^16.4.5",
-    "playwright": "^1.44.0"
+    "express": "^5.2.1",
+    "playwright": "^1.44.0",
+    "sqlite3": "^6.0.1"
   }
 }

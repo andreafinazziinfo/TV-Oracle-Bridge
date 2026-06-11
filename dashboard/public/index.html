@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CycleQuant Terminal - TradingView Oracle Dashboard</title>
+  <!-- Google Fonts: Outfit & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons (CSS Version) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Decorative Neon Bar -->
+  <div class="top-glow-bar"></div>
+
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-logo">
+          <span class="logo-symbol">⚡</span>
+          <span class="logo-text">CycleQuant <span class="accent-text">Oracle</span></span>
+        </div>
+        <p class="brand-subtitle">TradingView Terminal Bridge</p>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" data-tab="status-tab">
+          <i class="lucide-layout-dashboard"></i>
+          <span>Overview & Status</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="screenshots-tab">
+          <i class="lucide-image"></i>
+          <span>Screenshot Gallery</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="indicators-tab">
+          <i class="lucide-database"></i>
+          <span>Indicator Database</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="docs-tab">
+          <i class="lucide-book-open"></i>
+          <span>Pine Script Docs</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="downloader-tab">
+          <i class="lucide-download-cloud"></i>
+          <span>Script Downloader</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-indicator online">
+          <span class="pulse-dot"></span>
+          <span>Terminal Online</span>
+        </div>
+        <p class="version">v1.2.0 • MIT Licensed</p>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top header bar -->
+      <header class="content-header">
+        <h1 id="page-title">Overview & Status</h1>
+        <div class="header-actions">
+          <button id="refresh-all-btn" class="btn btn-secondary">
+            <i class="lucide-rotate-cw"></i> Refresh Data
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB 1: STATUS & OVERVIEW -->
+      <section id="status-tab" class="tab-pane active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon-wrapper blue-glow">
+              <i class="lucide-database"></i>
+            </div>
+            <div class="stat-info">
+              <h3>SQLite Cache DB</h3>
+              <p class="stat-value" id="db-status-val">Checking...</p>
+              <p class="stat-desc" id="db-size-val">0 KB size on disk</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrapper green-glow">
+              <i class="lucide-bar-chart-3"></i>
+            </div>
+            <div class="stat-info">
+              <h3>Cached Bar Data</h3>
+              <p class="stat-value" id="cached-bars-val">0</p>
+              <p class="stat-desc">OHLCV + plot records stored</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrapper purple-glow">
+              <i class="lucide-shield-check"></i>
+            </div>
+            <div class="stat-info">
+              <h3>TV Session Key</h3>
+              <p class="stat-value" id="session-status-val">Loading...</p>
+              <p class="stat-desc">Authenticates charts & script fetches</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="layout-grid">
+          <!-- Environment Config Details -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2><i class="lucide-sliders"></i> Environment Variables</h2>
+            </div>
+            <div class="panel-body">
+              <div class="env-table-wrapper">
+                <table class="env-table">
+                  <thead>
+                    <tr>
+                      <th>Variable</th>
+                      <th>Configuration Value</th>
+                    </tr>
+                  </thead>
+                  <tbody id="env-list">
+                    <tr><td colspan="2" class="text-center">Loading environment configuration...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Documentation Quick Info -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2><i class="lucide-book-marked"></i> System Overview</h2>
+            </div>
+            <div class="panel-body info-panel">
+              <p>The <strong>tv-oracle-bridge</strong> acts as an institutional-grade bridge connecting TradingView indicators, data feeds, and local backtesters.</p>
+              <ul class="features-list">
+                <li>
+                  <i class="lucide-check-circle text-green"></i>
+                  <div>
+                    <strong>Delta Syncing SQLite Cache:</strong>
+                    Loads historical periods, prevents duplicate calls, and updates on new closes.
+                  </div>
+                </li>
+                <li>
+                  <i class="lucide-check-circle text-green"></i>
+                  <div>
+                    <strong>Canvas Annotation Overlays:</strong>
+                    Automatically highlights candlestick patterns directly on PNG charts.
+                  </div>
+                </li>
+                <li>
+                  <i class="lucide-check-circle text-green"></i>
+                  <div>
+                    <strong>Pine Script Linter & Docs:</strong>
+                    Full dictionary covering v5/v6 commands with spellcheck suggestion algorithm.
+                  </div>
+                </li>
+                <li>
+                  <i class="lucide-check-circle text-green"></i>
+                  <div>
+                    <strong>Automated Script Downloader:</strong>
+                    Pulls source code from any public TradingView community script.
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: SCREENSHOTS GALLERY -->
+      <section id="screenshots-tab" class="tab-pane">
+        <div class="panel">
+          <div class="panel-header">
+            <h2><i class="lucide-image"></i> Captured Screenshot Logs</h2>
+            <p class="panel-subtitle">Interactive logs with automatic candlestick detections.</p>
+          </div>
+          <div class="panel-body">
+            <div class="gallery-grid" id="screenshots-gallery">
+              <!-- Dynamically populated -->
+              <p class="loading-placeholder">Scanning screenshot folders...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: INDICATOR DATABASE -->
+      <section id="indicators-tab" class="tab-pane">
+        <div class="layout-split">
+          <!-- Indicators List Sidebar -->
+          <div class="panel split-left">
+            <div class="panel-header">
+              <h2><i class="lucide-files"></i> Cached Indicators</h2>
+            </div>
+            <div class="panel-body">
+              <div class="list-container" id="indicators-list">
+                <!-- Dynamically populated -->
+                <p class="loading-placeholder font-small">Searching indicator files...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Indicator Details Panel -->
+          <div class="panel split-right">
+            <div class="panel-header" id="indicator-detail-header">
+              <h2><i class="lucide-eye"></i> Indicator Inspector</h2>
+              <p class="panel-subtitle">Select an indicator on the left to review parsed data, inputs, metadata and cached candles.</p>
+            </div>
+            <div class="panel-body" id="indicator-detail-body">
+              <div class="inspector-empty">
+                <i class="lucide-database-backup"></i>
+                <p>No indicator selected. Click an item from the sidebar to inspect.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: PINE SCRIPT REFERENCE -->
+      <section id="docs-tab" class="tab-pane">
+        <div class="panel">
+          <div class="panel-header docs-search-header">
+            <h2><i class="lucide-search-code"></i> Pine Script v5/v6 Autocomplete & Docs</h2>
+            <div class="search-bar-wrapper">
+              <i class="lucide-search search-icon"></i>
+              <input type="text" id="docs-search-input" placeholder="Search functions (e.g. ta.rsi, array.new, strategy.entry)..." autocomplete="off">
+            </div>
+          </div>
+          <div class="panel-body docs-body">
+            <div class="docs-layout">
+              <!-- Results List Sidebar -->
+              <div class="docs-results-sidebar">
+                <h3>Matching Functions (<span id="docs-count">0</span>)</h3>
+                <div class="docs-list" id="docs-results-list">
+                  <!-- Dynamically populated -->
+                </div>
+              </div>
+              
+              <!-- Result Details View -->
+              <div class="docs-detail-view" id="docs-detail-view">
+                <div class="inspector-empty">
+                  <i class="lucide-terminal"></i>
+                  <p>Type a query or select a function on the left to view documentation, syntax and example usage.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: SCRIPT DOWNLOADER -->
+      <section id="downloader-tab" class="tab-pane">
+        <div class="panel small-width-panel">
+          <div class="panel-header">
+            <h2><i class="lucide-download-cloud"></i> TradingView Public Script Downloader</h2>
+            <p class="panel-subtitle">Download Pine Script source code from any public TradingView community script detail page.</p>
+          </div>
+          <div class="panel-body">
+            <form id="download-form" class="downloader-form">
+              <div class="form-group">
+                <label for="script-url-input">TradingView Script URL</label>
+                <input type="url" id="script-url-input" placeholder="https://www.tradingview.com/script/v995o65g-Squeeze-Momentum-Indicator-LazyBear/" required>
+                <small class="form-help">Ensure this is the main detail page of a script with public open-source code.</small>
+              </div>
+              <div class="form-group">
+                <label for="script-filename-input">Output Filename</label>
+                <input type="text" id="script-filename-input" placeholder="SqueezeMomentum.pine" required>
+                <small class="form-help">The script will be saved to <code>out/downloads/&lt;filename&gt;</code>.</small>
+              </div>
+              <button type="submit" id="download-submit-btn" class="btn btn-primary">
+                <i class="lucide-download"></i> Extract & Download Script
+              </button>
+            </form>
+
+            <!-- Status Alert Console -->
+            <div id="downloader-status" class="downloader-console hidden">
+              <div class="console-header">
+                <span class="console-title">Console Output</span>
+                <span class="console-badge info" id="console-status-badge">Idle</span>
+              </div>
+              <pre id="console-log" class="console-log">Ready...</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Fullscreen Lightbox Modal for Screenshots -->
+  <div id="lightbox-modal" class="lightbox-modal">
+    <span class="lightbox-close">&times;</span>
+    <img class="lightbox-content" id="lightbox-img" alt="Screenshot preview">
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
