@@ -663,6 +663,10 @@ async function sendSystemNotification(msg) {
 
 async function runRefreshCycle() {
   logDaemon("Starting background cache refresh cycle...");
+  if (process.env.NODE_ENV === "test") {
+    logDaemon("Running in test mode. Skipping background child process executions.");
+    return;
+  }
   sendSystemNotification("⚡ [Auto-Refresher] Caching cycle started in background.");
   try {
     if (!fs.existsSync(localCfgPath)) {

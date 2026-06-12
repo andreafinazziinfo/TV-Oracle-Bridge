@@ -242,7 +242,7 @@ PRESETS: Dict[str, Dict[str, Any]] = {
         "sort_order": "asc"
     },
 
-    # --- CYCLELAB-OPTIMIZED COMBOS ---
+    # --- QUANT-OPTIMIZED COMBOS ---
     "cycle_reversal_long": {
         "title": "Cycle Reversal Long (RSI < 35, MACD Bullish & BB Lower)",
         "fields": ["name", "close", "RSI", "MACD.macd", "MACD.signal", "Stoch.RSI.K", "BB.lower", "BB.upper", "volume"],

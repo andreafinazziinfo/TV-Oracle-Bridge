@@ -10,56 +10,64 @@
 
 We executed `@luxalgo/pinets` against 4 representative scripts:
 
-### ta_ema_rsi.pine (❌ FAILED)
+### ta_ema_rsi.pine (✅ SUCCESS)
 ```javascript
-Transpilation failed: Transpiler process exited with code 1.
-Stderr:
-npm error code E404
-npm error 404 Not Found - GET https://registry.npmjs.org/@luxalgo%2fpinets - Not found
-npm error 404
-npm error 404  The requested resource '@luxalgo/pinets@*' could not be found or you do not have permission to access it.
-npm error 404
-npm error 404 Note that you can also install from a
-npm error 404 tarball, ...
+[PineTS Wrapper] Compiling Pine Script: C:\Users\Andrea\dev\tv-oracle-bridge\out\spike_tests\ta_ema_rsi.pine
+Transpilation successful! Output:
+
+async $ => {
+  const __maxLoops = $.__maxLoops || 500000;
+  const {close} = $.data;
+  const {ta, plot, indicator} = $.pine;
+  const p0 = $.param('EMA and RSI Test', undefined, 'p0');
+  const p1 = $.param({
+    overlay: true
+  }, undefined, 'p1');
+  indicat...
 ```
 
-### strategy_simple.pine (❌ FAILED)
+### strategy_simple.pine (✅ SUCCESS)
 ```javascript
-Transpilation failed: Transpiler process exited with code 1.
-Stderr:
-npm error code E404
-npm error 404 Not Found - GET https://registry.npmjs.org/@luxalgo%2fpinets - Not found
-npm error 404
-npm error 404  The requested resource '@luxalgo/pinets@*' could not be found or you do not have permission to access it.
-npm error 404
-npm error 404 Note that you can also install from a
-npm error 404 tarball, ...
+[PineTS Wrapper] Compiling Pine Script: C:\Users\Andrea\dev\tv-oracle-bridge\out\spike_tests\strategy_simple.pine
+Transpilation successful! Output:
+
+async $ => {
+  const __maxLoops = $.__maxLoops || 500000;
+  const {close} = $.data;
+  const {ta, strategy} = $.pine;
+  const p0 = strategy.param('Simple Strategy Test', undefined, 'p0');
+  const p1 = strategy.param({
+    overlay: true
+  }, undefined, ...
 ```
 
-### array_test.pine (❌ FAILED)
+### array_test.pine (✅ SUCCESS)
 ```javascript
-Transpilation failed: Transpiler process exited with code 1.
-Stderr:
-npm error code E404
-npm error 404 Not Found - GET https://registry.npmjs.org/@luxalgo%2fpinets - Not found
-npm error 404
-npm error 404  The requested resource '@luxalgo/pinets@*' could not be found or you do not have permission to access it.
-npm error 404
-npm error 404 Note that you can also install from a
-npm error 404 tarball, ...
+[PineTS Wrapper] Compiling Pine Script: C:\Users\Andrea\dev\tv-oracle-bridge\out\spike_tests\array_test.pine
+Transpilation successful! Output:
+
+async $ => {
+  const __maxLoops = $.__maxLoops || 500000;
+  const {close} = $.data;
+  const {array, plot, indicator} = $.pine;
+  const p0 = $.param('Array Test', undefined, 'p0');
+  indicator(p0);
+  const p1 = array.param(0, undefined, 'p1');
+  const temp_...
 ```
 
-### request_security.pine (❌ FAILED)
+### request_security.pine (✅ SUCCESS)
 ```javascript
-Transpilation failed: Transpiler process exited with code 1.
-Stderr:
-npm error code E404
-npm error 404 Not Found - GET https://registry.npmjs.org/@luxalgo%2fpinets - Not found
-npm error 404
-npm error 404  The requested resource '@luxalgo/pinets@*' could not be found or you do not have permission to access it.
-npm error 404
-npm error 404 Note that you can also install from a
-npm error 404 tarball, ...
+[PineTS Wrapper] Compiling Pine Script: C:\Users\Andrea\dev\tv-oracle-bridge\out\spike_tests\request_security.pine
+Transpilation successful! Output:
+
+async $ => {
+  const __maxLoops = $.__maxLoops || 500000;
+  const {close} = $.data;
+  const {request, plot, indicator, syminfo} = $.pine;
+  const p0 = $.param('Security Fetch Test', undefined, 'p0');
+  indicator(p0);
+  const p1 = request.param(syminf...
 ```
 
 ## Compatibility Matrix

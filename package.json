@@ -13,7 +13,7 @@
     "dashboard": "node dashboard/server.mjs",
     "postinstall": "node apply-lib-patch.mjs",
     "test:python": "python -m pytest tests -q",
-    "test:node": "node --test tests/node/test_cli_helpers.test.mjs tests/node/test_dashboard_api.test.mjs",
+    "test:node": "node --test tests/node/test_cli_helpers.test.mjs tests/node/test_dashboard_api.test.mjs tests/node/test_pine_parity.test.mjs tests/node/test_dashboard_edge_cases.test.mjs",
     "test": "npm run test:python && npm run test:node"
   },
   "dependencies": {

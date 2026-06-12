@@ -125,7 +125,7 @@ The Python screener includes a query builder (`screener_core.py`) mapped to 23 h
 * **Mean Reversion & Oscillators**: `mean_reversion`, `stoch_oversold`, `stoch_overbought`, `cci_extreme_low`, `cci_extreme_high`.
 * **Volume & Accumulation**: `whale_accumulation` (volume > 3x avg), `high_volatility`, `low_volatility_squeeze`, `unusual_volume`.
 * **Consensus & Performance**: `strong_buy_consensus` (Recommend.All > 0.5), `strong_sell_consensus`, `weekly_performers`, `monthly_losers`.
-* **CycleLab-Optimized Reversals**: `cycle_reversal_long`, `cycle_reversal_short`, and `divergence_scan`.
+* **Cycle-Optimized Reversals**: `cycle_reversal_long`, `cycle_reversal_short`, and `divergence_scan`.
 
 ### 5. Premium Dashboard Console Extensions
 The technical dashboard includes 4 advanced console extensions to improve operations and observability:
@@ -309,7 +309,12 @@ python mcp_server.py
 
 ---
 
-## ⚖️ Disclaimer
+## ⚖️ License & Trademark
 
-> [!WARNING]
-> This is an unofficial utility and is not affiliated, associated, authorized, endorsed by, or in any way officially connected with TradingView, Inc., or any of its subsidiaries or affiliates. Use this tool responsibly and in accordance with TradingView's terms of service.
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.
+
+### Trademark Disclaimer
+
+TradingView is a trademark of TradingView, Inc. This project is independent, self-hosted, and unaffiliated with, endorsed by, or sponsored by TradingView, Inc. or any of its partners.
+
+TV Oracle Bridge interacts with user-controlled local sessions and automation flows. It does not claim to be an official TradingView product. Users are responsible for complying with applicable platform terms and local laws.
