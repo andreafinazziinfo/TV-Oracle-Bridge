@@ -10,7 +10,12 @@ from bridge_utils import init_io, ORACLE_DIR, sanitize_key, sanitize_path, sanit
 init_io()
 
 # Initialize FastMCP server
-mcp = FastMCP("TV Oracle Bridge")
+import os
+mcp = FastMCP(
+    "TV Oracle Bridge", 
+    host=os.getenv("MCP_HOST", "127.0.0.1"), 
+    port=int(os.getenv("MCP_PORT", "8000"))
+)
 
 from screener import run_screener as exec_screener
 from pattern_detector import detect_from_oracle_file, get_candlestick_annotations
@@ -460,5 +465,10 @@ def get_market_news(symbol: str = "BINANCE:BTCUSDT", limit: int = 5) -> str:
     return format_news_markdown(symbol, news_items)
 
 if __name__ == "__main__":
-    mcp.run()
+    import os
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport == "sse":
+        mcp.run(transport="sse")
+    else:
+        mcp.run()
 

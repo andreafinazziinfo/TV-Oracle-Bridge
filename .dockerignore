@@ -1,0 +1,9 @@
+node_modules
+__pycache__
+*.pyc
+.git
+.venv
+.pytest_cache
+out
+*.log
+mcp_server.log

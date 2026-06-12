@@ -2,16 +2,23 @@
 # and all system libraries required to run headless browsers (Chromium/Firefox/WebKit).
 FROM mcr.microsoft.com/playwright:v1.44.0-jammy
 
+# Install python3-pip and ensure python symlink is set to python3
+RUN apt-get update && apt-get install -y python3-pip && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
 # Copy package files and install Node.js dependencies
-COPY package*.json ./
+COPY package*.json apply-lib-patch.mjs ./
 RUN npm install
+RUN npm rebuild sqlite3 --build-from-source
+
 
 # Copy python dependencies and install them
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
