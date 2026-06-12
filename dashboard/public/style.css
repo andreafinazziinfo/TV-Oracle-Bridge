@@ -651,6 +651,24 @@ body {
   border: 1px solid rgba(0, 242, 254, 0.2);
 }
 
+.badge-green {
+  background-color: rgba(0, 255, 135, 0.1);
+  color: var(--neon-green);
+  border: 1px solid rgba(0, 255, 135, 0.2);
+}
+
+.badge-yellow {
+  background-color: rgba(255, 170, 0, 0.1);
+  color: var(--neon-amber);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+}
+
+.badge-red {
+  background-color: rgba(255, 51, 102, 0.1);
+  color: var(--neon-red);
+  border: 1px solid rgba(255, 51, 102, 0.2);
+}
+
 .inspector-section {
   display: flex;
   flex-direction: column;

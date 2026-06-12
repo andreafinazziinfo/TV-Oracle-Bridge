@@ -33,6 +33,10 @@
           <i class="lucide-layout-dashboard"></i>
           <span>Overview & Status</span>
         </a>
+        <a href="#" class="nav-item" data-tab="health-tab">
+          <i class="lucide-activity"></i>
+          <span>Health & Session</span>
+        </a>
         <a href="#" class="nav-item" data-tab="screenshots-tab">
           <i class="lucide-image"></i>
           <span>Screenshot Gallery</span>
@@ -102,7 +106,9 @@
             <div class="stat-info">
               <h3>TV Session Key</h3>
               <p class="stat-value" id="session-status-val">Loading...</p>
-              <p class="stat-desc">Authenticates charts & script fetches</p>
+              <div id="session-countdown-wrapper" style="margin-top: 4px;">
+                <span class="badge" id="session-countdown-badge-overview">Checking expiry...</span>
+              </div>
             </div>
           </div>
         </div>
@@ -188,10 +194,13 @@
             </div>
           </div>
           <div class="panel-body" style="display: flex; flex-direction: column; gap: 14px;">
-            <div class="daemon-info-row" style="display: flex; gap: 20px; font-size: 0.9rem; color: var(--text-muted); flex-wrap: wrap;">
+            <div class="daemon-info-row" style="display: flex; gap: 20px; font-size: 0.9rem; color: var(--text-muted); flex-wrap: wrap; align-items: center;">
               <span>Next cycle schedule: <strong id="daemon-next-run-val" class="text-green">-</strong></span>
               <span>•</span>
               <span>Webhooks status: <strong id="daemon-notifiers-val" class="text-green">Checking...</strong></span>
+              <span>•</span>
+              <button id="test-notifier-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--border-color);"><i class="lucide-bell-ring"></i> Send Test Alert</button>
+              <span id="test-notifier-status" class="font-small text-muted" style="margin-left: 8px;"></span>
             </div>
             <!-- Daemon Console Output -->
             <div class="downloader-console" style="margin-top: 10px;">
@@ -200,6 +209,129 @@
                 <button id="daemon-clear-logs" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.65rem; border-color: var(--border-color);"><i class="lucide-trash-2" style="font-size: 0.75rem;"></i> Clear Console</button>
               </div>
               <pre id="daemon-log-box" class="console-log" style="max-height: 180px; font-size: 0.75rem; color: #a5f3fc;">No activity logs...</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screener Quick Test Panel -->
+        <div class="panel" style="grid-column: span 2; margin-top: 30px;">
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <h2><i class="lucide-filter"></i> Screener Console Preview</h2>
+              <p class="panel-subtitle">Test and preview one of the 23 technical screener presets in real-time.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <select id="screener-market-select" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+                <option value="crypto">Cryptocurrency</option>
+                <option value="forex">Forex</option>
+                <option value="america">US Stocks</option>
+              </select>
+              <select id="screener-preset-select" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none; width: 220px;">
+                <option value="top_volume">Top Volume (Default)</option>
+                <option value="top_gainers">Top Gainers</option>
+                <option value="oversold">Oversold (RSI < 30)</option>
+                <option value="overbought">Overbought (RSI > 70)</option>
+                <option value="momentum_breakout">Momentum Breakout</option>
+                <option value="trend_following">Trend Following</option>
+                <option value="golden_cross">Golden Cross</option>
+                <option value="death_cross">Death Cross</option>
+                <option value="mean_reversion">Mean Reversion</option>
+                <option value="stoch_oversold">Stochastic Oversold</option>
+                <option value="whale_accumulation">Whale Accumulation</option>
+                <option value="low_volatility_squeeze">Low Volatility Squeeze</option>
+                <option value="cycle_reversal_long">Cycle Reversal Long</option>
+                <option value="cycle_reversal_short">Cycle Reversal Short</option>
+                <option value="divergence_scan">Divergence Scan</option>
+              </select>
+              <button id="run-screener-preview-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.8rem;"><i class="lucide-play"></i> Run Scan</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="screener-preview-loading" class="hidden text-center text-muted" style="padding: 20px;">
+              <i class="lucide-rotate-cw pulse" style="font-size: 1.5rem;"></i>
+              <p style="margin-top: 10px;">Executing screener query on TradingView API...</p>
+            </div>
+            <div id="screener-preview-result" class="downloader-console hidden" style="margin-top: 0;">
+              <pre id="screener-preview-log" class="console-log" style="white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; color: #a5f3fc; line-height: 1.4; max-height: 350px;">Scan results will appear here...</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: HEALTH & SESSION -->
+      <section id="health-tab" class="tab-pane">
+        <div class="layout-grid">
+          <!-- System Health Details -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2><i class="lucide-activity"></i> Live System Health</h2>
+            </div>
+            <div class="panel-body info-panel">
+              <div class="health-grid" id="health-info-grid" style="display: flex; flex-direction: column; gap: 10px; font-size: 0.95rem;">
+                <div class="stat-item" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-color);">
+                  <span class="label" style="color: var(--text-muted); font-weight: 500;">Uptime:</span>
+                  <span id="health-uptime-val" class="value text-green" style="font-weight: 600;">Loading...</span>
+                </div>
+                <div class="stat-item" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-color);">
+                  <span class="label" style="color: var(--text-muted); font-weight: 500;">Node Version:</span>
+                  <span id="health-node-val" class="value" style="font-weight: 600;">Loading...</span>
+                </div>
+                <div class="stat-item" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-color);">
+                  <span class="label" style="color: var(--text-muted); font-weight: 500;">API Version:</span>
+                  <span class="value" style="font-weight: 600;">1.2.0</span>
+                </div>
+                <div class="stat-item" style="display: flex; justify-content: space-between; padding: 6px 0;">
+                  <span class="label" style="color: var(--text-muted); font-weight: 500;">Last Checked:</span>
+                  <span id="health-time-val" class="value font-small" style="font-weight: 600; color: var(--text-muted);">Loading...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Session Expiration & Refresh -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2><i class="lucide-key-round"></i> TradingView Session Cookie Expiry</h2>
+            </div>
+            <div class="panel-body info-panel" style="display: flex; flex-direction: column; gap: 14px;">
+              <div>
+                <p style="font-size: 1rem; font-weight: 600;">Status: <span id="session-countdown-badge">Loading...</span></p>
+                <p class="font-small text-muted" style="margin-top: 8px; line-height: 1.4;">TradingView cookies typically expire 90 days after login. Use the button below to regenerate cookies if they are expired or nearing expiration.</p>
+              </div>
+              <button id="health-refresh-session-btn" class="btn btn-secondary" style="margin-top: 10px; width: max-content; border-color: var(--primary-color); color: var(--primary-color);">
+                <i class="lucide-refresh-cw"></i> Refresh TV Session Cookies
+              </button>
+            </div>
+          </div>
+          
+          <!-- SQLite DB cache stats panel -->
+          <div class="panel" style="grid-column: span 2;">
+            <div class="panel-header">
+              <h2><i class="lucide-database"></i> SQLite Cache Database Statistics</h2>
+            </div>
+            <div class="panel-body">
+              <div class="cache-summary-row" style="display: flex; gap: 30px; margin-bottom: 20px; font-size: 0.95rem; font-weight: 600;">
+                <span>Total Stored Rows: <strong id="cache-total-rows-val" style="color: var(--neon-green);">-</strong></span>
+                <span>•</span>
+                <span>Database File Size: <strong id="cache-db-size-val" style="color: var(--neon-green);">-</strong></span>
+              </div>
+              <div class="env-table-wrapper">
+                <table class="env-table">
+                  <thead>
+                    <tr>
+                      <th>Indicator Key</th>
+                      <th>Symbol</th>
+                      <th>Timeframe</th>
+                      <th>Row Count</th>
+                      <th>Oldest Bar</th>
+                      <th>Newest Bar</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cache-stats-table-body">
+                    <tr><td colspan="6" class="text-center">Loading database cache stats...</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

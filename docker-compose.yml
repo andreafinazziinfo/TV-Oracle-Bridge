@@ -14,6 +14,7 @@ services:
       - ./indicators.local.json:/app/indicators.local.json
     ports:
       - "8000:8000"
+      - "5000:5000"
     environment:
       - TV_BROWSER_HEADLESS=true
       - TV_BROWSER_TYPE=chromium

@@ -2,19 +2,17 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { launchBrowser } from "./remoteControl.mjs";
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
 
 /**
  * Launch a visible browser window to let the user log in to TradingView,
  * then capture the fresh session cookies and save them to .env.
  */
 export async function refreshSession() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
   console.log("\n==================================================================");
   console.log("🔑 TRADINGVIEW SESSION COOKIE REFRESHER");
   console.log("==================================================================\n");
@@ -90,6 +88,31 @@ export async function refreshSession() {
   } else {
     console.log("⚠️ sessionid_sign cookie was not found (optional for some accounts).");
   }
+
+  // Validate session against TradingView API before saving
+  console.log("Validating session cookies with TradingView status API...");
+  try {
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Cookie": `sessionid=${sessionVal}${signVal ? '; sessionid_sign=' + signVal : ''}`
+    };
+    const checkRes = await fetch("https://www.tradingview.com/accounts/signin/status/", { headers });
+    if (!checkRes.ok) {
+      throw new Error(`TradingView status API returned HTTP status ${checkRes.status}`);
+    }
+    const checkData = await checkRes.json();
+    const username = checkData.user?.username;
+    if (!username) {
+      throw new Error("TradingView status API returned empty/unauthorized user payload.");
+    }
+    console.log(`🎉 Session is VALID! Authenticated as user: ${username}`);
+  } catch (err) {
+    console.error(`❌ Session validation FAILED: ${err.message}`);
+    console.error("The captured session cookies might not be authenticated yet or got blocked.");
+    await playwrightBrowser.close();
+    rl.close();
+    process.exit(1);
+  }
   
   // Read and update the .env file
   const envPath = path.resolve("./.env");
@@ -121,7 +144,7 @@ export async function refreshSession() {
     lines.push(`TV_SESSION_SIGN=${signVal}`);
   }
   
-  fs.writeFileSync(envPath, lines.join("\n"), "utf8");
+  fs.writeFileSync(envPath, lines.join("\n"), { encoding: "utf8", mode: 0o600 });
   console.log("\n💾 Local .env file updated successfully!");
   
   await playwrightBrowser.close();

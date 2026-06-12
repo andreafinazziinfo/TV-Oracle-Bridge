@@ -1,136 +1,173 @@
+"""
+screener.py — User-facing Screener interface for TV-Oracle-Bridge.
+
+Delegates presets to screener_presets.py and exposes arbitrary query capability
+via run_custom_screener.
+"""
+
 import json
 import sys
-import urllib.request
-import urllib.error
+from typing import List, Dict, Any, Union
+from bridge_utils import init_io
+import screener_core
+import screener_presets
 
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
+init_io()
 
 def run_screener(market: str = "crypto", condition: str = "top_volume", limit: int = 15) -> str:
-    """Query the official TradingView scan endpoint for real-time market data and indicators.
+    """Query the official TradingView scan endpoint using preset configurations.
     
     Args:
-        market: E.g. "crypto", "forex", "america" (US stocks).
-        condition: E.g. "top_volume", "top_gainers", "oversold" (RSI < 30), "overbought" (RSI > 70).
+        market: E.g. "crypto", "forex", "america", "global".
+        condition: E.g. "top_volume", "top_gainers", "oversold", "momentum_breakout", etc.
         limit: Max number of rows to return (default: 15).
     """
-    # Map market parameter to TradingView scanner endpoint
-    market_map = {
-        "crypto": "crypto",
-        "forex": "forex",
-        "america": "global",
-        "global": "global"
-    }
-    
-    scan_market = market_map.get(market.lower(), "crypto")
-    url = f"https://scanner.tradingview.com/{scan_market}/scan"
-    
-    # Configure filters and columns based on selected condition
-    filters = []
-    sort_by = "volume"
-    sort_order = "desc"
-    
-    if condition == "oversold":
-        filters.append({"left": "RSI", "operation": "less", "right": 30})
-        sort_by = "RSI"
-        sort_order = "asc"
-    elif condition == "overbought":
-        filters.append({"left": "RSI", "operation": "greater", "right": 70})
-        sort_by = "RSI"
-        sort_order = "desc"
-    elif condition == "top_gainers":
-        sort_by = "change"
-        sort_order = "desc"
-    elif condition == "top_volume":
-        sort_by = "volume"
-        sort_order = "desc"
-
-    # Define request columns
-    columns = ["name", "close", "change", "volume", "RSI", "recommendation"]
-    
-    # Prepare POST payload
-    payload = {
-        "filter": filters,
-        "options": {"lang": "en"},
-        "markets": [market],
-        "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": columns,
-        "sort": {"sortBy": sort_by, "sortOrder": sort_order},
-        "range": [0, limit]
-    }
+    preset_name = condition.lower()
+    if preset_name not in screener_presets.PRESETS:
+        return f"Error: Unknown screener preset '{condition}'. Supported presets: {', '.join(screener_presets.PRESETS.keys())}"
+        
+    preset = screener_presets.PRESETS[preset_name]
+    fields = preset["fields"]
+    filters = preset["filters"]
+    sort_by = preset["sort_by"]
+    sort_order = preset.get("sort_order", "desc")
+    local_filter = preset.get("local_filter")
+    title = f"TradingView Preset Scan ({market.upper()} - {preset['title']})"
     
     try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-            method="POST"
+        # If there's a local filter, query more rows from the API to allow filtering down to requested limit
+        query_limit = limit * 4 if local_filter else limit
+        if query_limit > 100:
+            query_limit = 100
+            
+        query = screener_core.build_query(
+            market=market,
+            fields=fields,
+            filters=filters,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=query_limit
         )
         
-        with urllib.request.urlopen(req, timeout=15) as response:
-            res_data = json.load(response)
-            
-        data = res_data.get("data", [])
+        rows = screener_core.execute_query(market, query)
         
-        # Format output as markdown table
-        lines = [
-            f"### TradingView Technical Scan ({market.upper()} - {condition.upper()})",
-            "",
-            "| Asset | Price | Change % | Volume | RSI (14) | Recommendation |",
-            "| :--- | :--- | :--- | :--- | :--- | :--- |"
-        ]
+        # Apply local Python filter if specified
+        if local_filter:
+            filtered_rows = []
+            for r in rows:
+                try:
+                    if local_filter(r):
+                        filtered_rows.append(r)
+                except Exception:
+                    pass
+            rows = filtered_rows[:limit]
+        else:
+            rows = rows[:limit]
+            
+        return screener_core.format_markdown(rows, fields, title)
         
-        for row in data:
-            name = row.get("d", [None])[0] or row.get("s", "UNKNOWN")
-            # Remove exchange prefix if present in name
-            name_parts = name.split(":")
-            short_name = name_parts[1] if len(name_parts) > 1 else name_parts[0]
-            
-            d_values = row.get("d", [])
-            close = d_values[1] if len(d_values) > 1 else "N/A"
-            change = d_values[2] if len(d_values) > 2 else "N/A"
-            volume = d_values[3] if len(d_values) > 3 else "N/A"
-            rsi = d_values[4] if len(d_values) > 4 else "N/A"
-            rec = d_values[5] if len(d_values) > 5 else "N/A"
-            
-            # Format decimals for cleaner presentation
-            fmt_close = f"{close:.4f}" if isinstance(close, (int, float)) else str(close)
-            fmt_change = f"{change:.2f}%" if isinstance(change, (int, float)) else str(change)
-            fmt_rsi = f"{rsi:.2f}" if isinstance(rsi, (int, float)) else str(rsi)
-            
-            # Format volume to human readable suffix (e.g. 1.2M, 50K)
-            if isinstance(volume, (int, float)):
-                if volume >= 1_000_000:
-                    fmt_vol = f"{volume / 1_000_000:.2f}M"
-                elif volume >= 1_000:
-                    fmt_vol = f"{volume / 1_000:.1f}K"
-                else:
-                    fmt_vol = str(volume)
-            else:
-                fmt_vol = str(volume)
-                
-            # Map recommendation values
-            rec_map = {
-                1: "🟢 Strong Buy",
-                0.5: "🟢 Buy",
-                0: "⚪ Neutral",
-                -0.5: "🔴 Sell",
-                -1: "🔴 Strong Sell"
-            }
-            fmt_rec = rec_map.get(rec, str(rec)) if isinstance(rec, (int, float)) else str(rec)
-            
-            lines.append(f"| **{short_name}** | {fmt_close} | {fmt_change} | {fmt_vol} | {fmt_rsi} | {fmt_rec} |")
-            
-        return "\n".join(lines)
-        
-    except urllib.error.URLError as e:
-        return f"Error connecting to TradingView Screener API: {e.reason}"
     except Exception as e:
         return f"Error executing scan: {str(e)}"
+
+def run_custom_screener(
+    market: str,
+    fields: Union[str, List[str]],
+    filters: Union[str, List[Dict[str, Any]]],
+    sort_by: str,
+    sort_order: str = "desc",
+    limit: int = 15
+) -> str:
+    """Run an arbitrary custom TradingView scanner query.
+    
+    Args:
+        market: E.g. "crypto", "forex", "america", "global".
+        fields: List of fields or JSON string list (e.g. '["name", "close", "RSI"]').
+        filters: List of filters or JSON string list (e.g. '[{"left": "RSI", "op": "less", "right": 30}]').
+                 Filters support operators: "less", "greater", "equal", "ne", "crosses_above", "crosses_below".
+        sort_by: Field to sort by (e.g. "volume").
+        sort_order: "desc" or "asc".
+        limit: Max rows to return.
+    """
+    try:
+        # Parse fields if JSON string
+        if isinstance(fields, str):
+            try:
+                fields = json.loads(fields)
+            except json.JSONDecodeError:
+                return f"Error parsing fields JSON: {fields}"
+                
+        # Parse filters if JSON string
+        if isinstance(filters, str):
+            try:
+                filters = json.loads(filters)
+            except json.JSONDecodeError:
+                return f"Error parsing filters JSON: {filters}"
+                
+        if not isinstance(fields, list):
+            return f"Error: fields must be a list. Got: {type(fields)}"
+        if not isinstance(filters, list):
+            return f"Error: filters must be a list. Got: {type(filters)}"
+            
+        # Map filter operators if they are short version (e.g. "less" -> "less", "op" -> "operation")
+        normalized_filters = []
+        for filt in filters:
+            norm = {}
+            if "left" in filt:
+                norm["left"] = filt["left"]
+            else:
+                continue
+                
+            op = filt.get("operation") or filt.get("op") or "equal"
+            # Map operator abbreviations
+            op_map = {
+                "less": "less",
+                "greater": "greater",
+                "equal": "equal",
+                "ne": "ne",
+                "crosses_above": "crosses_above",
+                "crosses_below": "crosses_below",
+                "<": "less",
+                ">": "greater",
+                "=": "equal",
+                "!=": "ne"
+            }
+            norm["operation"] = op_map.get(op.lower(), op)
+            
+            if "right" in filt:
+                norm["right"] = filt["right"]
+            normalized_filters.append(norm)
+            
+        # Normalize fields to include 'name' if not present
+        if "name" not in fields:
+            fields_for_query = ["name"] + fields
+        else:
+            fields_for_query = list(fields)
+            
+        query = screener_core.build_query(
+            market=market,
+            fields=fields_for_query,
+            filters=normalized_filters,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit
+        )
+        
+        rows = screener_core.execute_query(market, query)
+        
+        title = f"TradingView Custom Scan ({market.upper()} - sorted by {sort_by})"
+        return screener_core.format_markdown(rows, fields_for_query, title)
+        
+    except Exception as e:
+        return f"Error executing custom scan: {str(e)}"
 
 # Self-run for testing
 if __name__ == "__main__":
     import sys
-    mkt = sys.argv[1] if len(sys.argv) > 1 else "crypto"
-    cond = sys.argv[2] if len(sys.argv) > 2 else "top_volume"
-    print(run_screener(mkt, cond, 10))
+    if len(sys.argv) > 2:
+        mkt = sys.argv[1]
+        cond = sys.argv[2]
+        lim = int(sys.argv[3]) if len(sys.argv) > 3 else 15
+        print(run_screener(mkt, cond, lim))
+    else:
+        print("Usage: python screener.py <market> <condition/preset> [limit]")
+        print("Example: python screener.py crypto oversold 10")

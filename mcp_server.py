@@ -4,18 +4,14 @@ import sys
 import json
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
+from bridge_utils import init_io, ORACLE_DIR, sanitize_key, sanitize_path, sanitize_url
 
-# Ensure UTF-8 stdout on Windows to prevent UnicodeEncodeError with emojis
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+# Ensure UTF-8 stdout on Windows
+init_io()
 
 # Initialize FastMCP server
 mcp = FastMCP("TV Oracle Bridge")
 
-ORACLE_DIR = Path(__file__).parent.resolve()
-
-# Add local path to sys.path to ensure correct imports
-sys.path.append(str(ORACLE_DIR))
 from screener import run_screener as exec_screener
 from pattern_detector import detect_from_oracle_file, get_candlestick_annotations
 from pine_docs import get_pine_docs as fetch_pine_docs, validate_pine_code as check_pine_syntax
@@ -25,20 +21,24 @@ from notifier import send_notification as dispatch_notification
 
 @mcp.tool()
 def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int = 20000) -> str:
-    """Fetch an indicator's computed output from TradingView, leveraging local SQLite cache.
+    """Fetch an indicator's computed output from TradingView, leveraging local SQLite cache and logging run telemetry.
     
     Args:
         key: The indicator key from indicators.json (e.g. "completa", "model_entry", "pattern_matching").
         range_val: Number of bars to load (default: 5000).
         wait_ms: Streaming wait time in milliseconds before snapshotting (default: 20000).
     """
+    from datetime import datetime
+    from tv_cache import record_run
+    
+    symbol = os.getenv("TV_SYMBOL", "BINANCE:BTCUSDT")
+    timeframe = os.getenv("TV_TIMEFRAME", "60")
+    started_at = datetime.utcnow().isoformat()
+    is_delta_sync = False
+    
     try:
-        symbol = os.getenv("TV_SYMBOL", "BINANCE:BTCUSDT")
-        timeframe = os.getenv("TV_TIMEFRAME", "60")
-        
         # Check if we already have cached bars to enable delta synchronization
         last_timestamp = get_last_cached_timestamp(key, symbol, timeframe)
-        is_delta_sync = False
         
         if last_timestamp > 0:
             print(f"[SQLite Cache] Found last cached timestamp: {last_timestamp}. Enabling delta-sync (last 100 bars).")
@@ -59,7 +59,10 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         # Check output file
         out_file = ORACLE_DIR / "out" / f"{key}.json"
         if not out_file.exists():
-            return f"Error: Indicator fetched but output file {out_file} not found. Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
+            err_msg = f"Error: Indicator fetched but output file {out_file} not found."
+            finished_at = datetime.utcnow().isoformat()
+            record_run(key, symbol, timeframe, started_at, finished_at, "failure", range_val, 0, is_delta_sync, err_msg)
+            return f"{err_msg} Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
             
         # Read the fresh fetched data
         with open(out_file, "r", encoding="utf-8") as f:
@@ -67,6 +70,12 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
             
         # Merge fresh data with SQLite history and rewrite out/<key>.json
         merged_data = merge_and_update_cache(key, symbol, timeframe, fresh_data)
+        
+        finished_at = datetime.utcnow().isoformat()
+        record_run(
+            key, symbol, timeframe, started_at, finished_at, "success", 
+            range_val, merged_data.get("periodsCount", 0), is_delta_sync
+        )
         
         summary = {
             "meta": merged_data.get("meta"),
@@ -81,7 +90,26 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         return json.dumps(summary, indent=2)
         
     except subprocess.CalledProcessError as e:
+        finished_at = datetime.utcnow().isoformat()
+        record_run(key, symbol, timeframe, started_at, finished_at, "failure", range_val, 0, is_delta_sync, f"Subprocess error: {str(e.stderr)}")
         return f"Error running fetchIndicator: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        finished_at = datetime.utcnow().isoformat()
+        record_run(key, symbol, timeframe, started_at, finished_at, "failure", range_val, 0, is_delta_sync, str(e))
+        return f"Error: {e}"
+
+@mcp.tool()
+def get_run_history(key: str = None, limit: int = 50) -> str:
+    """Retrieve execution telemetry and synchronization runs history log.
+    
+    Args:
+        key: Optional indicator key to filter history logs (e.g. "completa").
+        limit: Max number of history items to return (default: 50).
+    """
+    from tv_cache import get_run_history as fetch_run_history
+    try:
+        history = fetch_run_history(key, limit)
+        return json.dumps(history, indent=2)
     except Exception as e:
         return f"Error: {e}"
 
@@ -137,6 +165,25 @@ def capture_screenshot(symbol: str = "BINANCE:BTCUSDT", timeframe: str = "60", n
         if not screenshot_path.exists():
             return f"Error: Screenshot task completed but image {screenshot_path} not found. Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
             
+        # Parse and return structured JSON metadata
+        stdout_lines = result.stdout.splitlines()
+        metadata_str = None
+        for line in stdout_lines:
+            if line.startswith("Done! Path: {"):
+                metadata_str = line.replace("Done! Path: ", "").strip()
+                break
+                
+        if metadata_str:
+            try:
+                metadata = json.loads(metadata_str)
+                return json.dumps({
+                    "status": "success",
+                    "message": f"Screenshot saved successfully to {screenshot_path}",
+                    "metadata": metadata
+                }, indent=2)
+            except Exception:
+                pass
+                
         return f"Success: Screenshot saved to {screenshot_path}\nStdout:\n{result.stdout}"
     except subprocess.CalledProcessError as e:
         return f"Error running screenshot automation: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
@@ -178,14 +225,43 @@ def refresh_session_credentials() -> str:
 
 @mcp.tool()
 def run_screener(market: str = "crypto", condition: str = "top_volume", limit: int = 15) -> str:
-    """Query TradingView screener API to scan for technical market setups in real-time.
+    """Query TradingView screener API using preset configurations (23 presets available).
     
     Args:
-        market: Target category: "crypto", "forex", or "america" (for US stocks).
-        condition: Filter setup: "top_volume", "top_gainers", "oversold" (RSI < 30), or "overbought" (RSI > 70).
+        market: Target category: "crypto", "forex", "america", or "global".
+        condition: Filter setup preset: "top_volume", "top_gainers", "oversold", "overbought", 
+                   "momentum_breakout", "trend_following", "golden_cross", "death_cross", 
+                   "mean_reversion", "stoch_oversold", "stoch_overbought", "cci_extreme_low", 
+                   "cci_extreme_high", "whale_accumulation", "high_volatility", 
+                   "low_volatility_squeeze", "unusual_volume", "strong_buy_consensus", 
+                   "strong_sell_consensus", "weekly_performers", "monthly_losers", 
+                   "cycle_reversal_long", "cycle_reversal_short", "divergence_scan".
         limit: Max number of assets to return (default: 15).
     """
     return exec_screener(market, condition, limit)
+
+@mcp.tool()
+def run_custom_screener(
+    market: str,
+    fields_json: str,
+    filters_json: str,
+    sort_by: str,
+    sort_order: str = "desc",
+    limit: int = 15
+) -> str:
+    """Run an arbitrary custom TradingView scanner query by specifying target fields and filters.
+    
+    Args:
+        market: Target category: "crypto", "forex", "america", or "global".
+        fields_json: JSON string list of fields to request (e.g. '["name", "close", "RSI", "MACD.macd"]').
+        filters_json: JSON string list of filter dicts (e.g. '[{"left": "RSI", "op": "less", "right": 30}]').
+                     Supported operators: "less", "greater", "equal", "ne", "crosses_above", "crosses_below".
+        sort_by: Field/column name to sort by (e.g. "volume", "RSI", "change").
+        sort_order: Sort direction "desc" or "asc" (default: "desc").
+        limit: Max number of assets to return (default: 15).
+    """
+    from screener import run_custom_screener as exec_custom_screener
+    return exec_custom_screener(market, fields_json, filters_json, sort_by, sort_order, limit)
 
 @mcp.tool()
 def detect_patterns(key: str = "completa") -> str:

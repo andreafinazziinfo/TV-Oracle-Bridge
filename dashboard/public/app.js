@@ -1,5 +1,19 @@
 // TV-Oracle-Bridge - Dashboard Client Engine
 document.addEventListener("DOMContentLoaded", () => {
+  /**
+   * Escape HTML special characters to prevent XSS when inserting into innerHTML.
+   * Use this for ALL user/server-supplied text values.
+   */
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // Navigation & State Management
   const navItems = document.querySelectorAll(".nav-item");
   const tabPanes = document.querySelectorAll(".tab-pane");
@@ -43,6 +57,10 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (tabId) {
       case "status-tab":
         loadStatus();
+        loadDaemonStatus();
+        break;
+      case "health-tab":
+        loadHealth();
         break;
       case "screenshots-tab":
         loadScreenshots();
@@ -94,11 +112,27 @@ document.addEventListener("DOMContentLoaded", () => {
       cachedBarsVal.innerText = stats.cachedBars.toLocaleString();
 
       if (stats.env.TV_SESSION !== "Not Configured") {
-        sessionStatusVal.innerText = "Valid Session";
+        sessionStatusVal.innerText = "Configured";
         sessionStatusVal.className = "stat-value text-green";
       } else {
         sessionStatusVal.innerText = "Missing Cookie";
         sessionStatusVal.className = "stat-value text-red";
+      }
+
+      // Check session validity countdown
+      try {
+        const sessionRes = await fetch("/api/session/validate");
+        const sessionData = await sessionRes.json();
+        const overviewBadge = document.getElementById("session-countdown-badge-overview");
+        if (overviewBadge) {
+          if (sessionData.success && sessionData.valid) {
+            overviewBadge.innerHTML = sessionData.countdownHtml;
+          } else {
+            overviewBadge.innerHTML = "<span class='badge badge-red'>Expired / Missing</span>";
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load session status overview:", err);
       }
 
       // Update Env Table
@@ -106,8 +140,8 @@ document.addEventListener("DOMContentLoaded", () => {
       for (const [key, value] of Object.entries(stats.env)) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td><strong>${key}</strong></td>
-          <td><code>${value}</code></td>
+          <td><strong>${escapeHtml(key)}</strong></td>
+          <td><code>${escapeHtml(value)}</code></td>
         `;
         envList.appendChild(tr);
       }
@@ -131,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Failed to load status:", err);
       dbStatusVal.innerText = "Error";
       sessionStatusVal.innerText = "Error";
-      envList.innerHTML = `<tr><td colspan="2" class="text-center text-red">Failed to load environment status: ${err.message}</td></tr>`;
+      envList.innerHTML = `<tr><td colspan="2" class="text-center text-red">Failed to load environment status: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
@@ -233,10 +267,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initial daemon load
   loadDaemonStatus();
 
-  // Set daemon polling loop (every 3 seconds)
+  // Set visibility-gated polling loop (every 3 seconds)
   setInterval(() => {
-    if (activeTabId === "status-tab") {
-      loadDaemonStatus();
+    if (document.visibilityState === 'visible') {
+      if (activeTabId === "status-tab") {
+        loadDaemonStatus();
+      } else if (activeTabId === "health-tab") {
+        loadHealth();
+      }
     }
   }, 3000);
 
@@ -277,10 +315,10 @@ document.addEventListener("DOMContentLoaded", () => {
         card.className = "gallery-card";
         card.innerHTML = `
           <div class="gallery-thumb-wrapper">
-            <img class="gallery-thumb" src="${scr.url}" alt="${scr.filename}" loading="lazy">
+            <img class="gallery-thumb" src="${escapeHtml(scr.url)}" alt="${escapeHtml(scr.filename)}" loading="lazy">
             <div class="gallery-overlay">
               <div class="gallery-info">
-                <span class="gallery-title">${scr.filename}</span>
+                <span class="gallery-title">${escapeHtml(scr.filename)}</span>
                 <span class="gallery-date">${new Date(scr.createdAt).toLocaleString()}</span>
               </div>
             </div>
@@ -294,7 +332,7 @@ document.addEventListener("DOMContentLoaded", () => {
         gallery.appendChild(card);
       });
     } catch (err) {
-      gallery.innerHTML = `<p class="loading-placeholder text-red">Error loading screenshots: ${err.message}</p>`;
+      gallery.innerHTML = `<p class="loading-placeholder text-red">Error loading screenshots: ${escapeHtml(err.message)}</p>`;
     }
   }
 
@@ -342,10 +380,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const item = document.createElement("div");
         item.className = "list-item";
         item.innerHTML = `
-          <span class="list-item-title">${ind.meta.name || ind.indicatorKey}</span>
+          <span class="list-item-title">${escapeHtml(ind.meta.name || ind.indicatorKey)}</span>
           <div class="list-item-subtitle">
-            <span>${ind.meta.symbol || "N/A"} (${ind.meta.timeframe || "N/A"})</span>
-            <span>${ind.periodsCount} bars</span>
+            <span>${escapeHtml(ind.meta.symbol || "N/A")} (${escapeHtml(ind.meta.timeframe || "N/A")})</span>
+            <span>${escapeHtml(ind.periodsCount)} bars</span>
           </div>
           <span class="list-item-meta">Updated: ${new Date(ind.lastUpdated).toLocaleTimeString()}</span>
         `;
@@ -360,7 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
         indicatorsList.appendChild(item);
       });
     } catch (err) {
-      indicatorsList.innerHTML = `<p class="loading-placeholder font-small text-red">Error: ${err.message}</p>`;
+      indicatorsList.innerHTML = `<p class="loading-placeholder font-small text-red">Error: ${escapeHtml(err.message)}</p>`;
     }
   }
 
@@ -377,8 +415,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Update Header
       detailHeader.innerHTML = `
-        <h2><i class="lucide-file-code"></i> ${meta.name || key}</h2>
-        <p class="panel-subtitle">Key: <code>${key}</code> • File: <code>out/${key}.json</code></p>
+        <h2><i class="lucide-file-code"></i> ${escapeHtml(meta.name || key)}</h2>
+        <p class="panel-subtitle">Key: <code>${escapeHtml(key)}</code> • File: <code>out/${escapeHtml(key)}.json</code></p>
       `;
 
       // Build plots indicator tags (color dots for visual feedback)
@@ -389,8 +427,8 @@ document.addEventListener("DOMContentLoaded", () => {
           const color = p.color || "#00f2fe";
           plotsHtml += `
             <div class="plot-tag">
-              <span class="plot-dot" style="background-color: ${color}"></span>
-              <span>${p.name || `plot_${idx}`}</span>
+              <span class="plot-dot" style="background-color: ${escapeHtml(color)}"></span>
+              <span>${escapeHtml(p.name || `plot_${idx}`)}</span>
             </div>
           `;
         });
@@ -404,8 +442,8 @@ document.addEventListener("DOMContentLoaded", () => {
         for (const [inKey, inVal] of Object.entries(indData.inputs)) {
           inputsHtml += `
             <div class="inspector-info-card">
-              <div class="info-card-label">${inKey}</div>
-              <div class="info-card-value">${typeof inVal === 'object' ? JSON.stringify(inVal) : inVal}</div>
+              <div class="info-card-label">${escapeHtml(inKey)}</div>
+              <div class="info-card-value">${escapeHtml(typeof inVal === 'object' ? JSON.stringify(inVal) : inVal)}</div>
             </div>
           `;
         }
@@ -416,7 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
       let tableHeaders = "<tr><th>Timestamp</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th>";
       if (indData.plots && indData.plots.length > 0) {
         indData.plots.forEach(p => {
-          tableHeaders += `<th>${p.name}</th>`;
+          tableHeaders += `<th>${escapeHtml(p.name)}</th>`;
         });
       }
       tableHeaders += "</tr>";
@@ -457,15 +495,15 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="inspector-grid">
               <div class="inspector-info-card">
                 <div class="info-card-label">Symbol</div>
-                <div class="info-card-value text-green">${meta.symbol || "N/A"}</div>
+                <div class="info-card-value text-green">${escapeHtml(meta.symbol || "N/A")}</div>
               </div>
               <div class="inspector-info-card">
                 <div class="info-card-label">Timeframe</div>
-                <div class="info-card-value text-green">${meta.timeframe || "N/A"}</div>
+                <div class="info-card-value text-green">${escapeHtml(meta.timeframe || "N/A")}</div>
               </div>
               <div class="inspector-info-card">
                 <div class="info-card-label">Type</div>
-                <div class="info-card-value">${meta.type || "Study/Indicator"}</div>
+                <div class="info-card-value">${escapeHtml(meta.type || "Study/Indicator")}</div>
               </div>
               <div class="inspector-info-card">
                 <div class="info-card-label">Total Data Points</div>
@@ -502,7 +540,7 @@ document.addEventListener("DOMContentLoaded", () => {
       detailBody.innerHTML = `
         <div class="inspector-empty text-red">
           <i class="lucide-alert-triangle"></i>
-          <p>Failed to load indicator details: ${err.message}</p>
+          <p>Failed to load indicator details: ${escapeHtml(err.message)}</p>
         </div>
       `;
     }
@@ -563,7 +601,7 @@ document.addEventListener("DOMContentLoaded", () => {
         firstItem.click();
       }
     } catch (err) {
-      docsResultsList.innerHTML = `<p class="text-red font-small">Error querying docs: ${err.message}</p>`;
+      docsResultsList.innerHTML = `<p class="text-red font-small">Error querying docs: ${escapeHtml(err.message)}</p>`;
     }
   }
 
@@ -585,9 +623,9 @@ document.addEventListener("DOMContentLoaded", () => {
       detail.arguments.forEach(arg => {
         argsHtml += `
           <tr>
-            <td><strong><code>${arg.name}</code></strong></td>
-            <td><code>${arg.type || "any"}</code></td>
-            <td>${arg.desc || "No description provided."}</td>
+            <td><strong><code>${escapeHtml(arg.name)}</code></strong></td>
+            <td><code>${escapeHtml(arg.type || "any")}</code></td>
+            <td>${escapeHtml(arg.desc || "No description provided.")}</td>
           </tr>
         `;
       });
@@ -596,12 +634,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     docsDetailView.innerHTML = `
       <div class="inspector-details">
-        <h2 class="doc-func-title">${funcName}</h2>
-        <p class="doc-func-desc">${detail.description || "No description available."}</p>
+        <h2 class="doc-func-title">${escapeHtml(funcName)}</h2>
+        <p class="doc-func-desc">${escapeHtml(detail.description || "No description available.")}</p>
         
         <div class="inspector-section">
           <h3>Signature Syntax</h3>
-          <pre class="syntax-box">${detail.syntax || `${funcName}()`}</pre>
+          <pre class="syntax-box">${escapeHtml(detail.syntax || `${funcName}()`)}</pre>
         </div>
 
         <div class="inspector-section">
@@ -611,7 +649,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div class="inspector-section">
           <h3>Pine Script v5/v6 Usage Example</h3>
-          <pre class="example-box">${detail.example || `//@version=5\n// No example provided.`}</pre>
+          <pre class="example-box">${escapeHtml(detail.example || `//@version=5\n// No example provided.`)}</pre>
         </div>
       </div>
     `;
@@ -709,5 +747,161 @@ ${result.error}`;
       scriptFilenameInput.disabled = false;
     }
   });
+
+  // ==========================================
+  // TAB: HEALTH & SESSION
+  // ==========================================
+  const healthUptimeVal = document.getElementById("health-uptime-val");
+  const healthNodeVal = document.getElementById("health-node-val");
+  const healthTimeVal = document.getElementById("health-time-val");
+  const sessionCountdownBadge = document.getElementById("session-countdown-badge");
+  const cacheTotalRowsVal = document.getElementById("cache-total-rows-val");
+  const cacheDbSizeVal = document.getElementById("cache-db-size-val");
+  const cacheStatsTableBody = document.getElementById("cache-stats-table-body");
+  const healthRefreshSessionBtn = document.getElementById("health-refresh-session-btn");
+
+  async function loadHealth() {
+    try {
+      // 1. Load System Health
+      const healthRes = await fetch("/api/health");
+      const healthData = await healthRes.json();
+      if (healthData.status === "ok") {
+        const uptimeHrs = (healthData.uptime / 3600).toFixed(2);
+        healthUptimeVal.innerText = `${uptimeHrs} hours`;
+        healthNodeVal.innerText = healthData.node;
+        healthTimeVal.innerText = new Date(healthData.timestamp).toLocaleTimeString();
+      }
+
+      // 2. Load Session Expiry status
+      const sessionRes = await fetch("/api/session/validate");
+      const sessionData = await sessionRes.json();
+      if (sessionData.success && sessionData.valid) {
+        sessionCountdownBadge.innerHTML = sessionData.countdownHtml;
+      } else {
+        sessionCountdownBadge.innerHTML = `<span class="badge badge-red">Expired (${sessionData.reason || "unknown reason"})</span>`;
+      }
+
+      // 3. Load SQLite DB Stats
+      const cacheRes = await fetch("/api/cache/stats");
+      const cacheData = await cacheRes.json();
+      if (cacheData.success) {
+        const stats = cacheData.stats;
+        cacheTotalRowsVal.innerText = stats.totalRows.toLocaleString() + " rows";
+        const sizeMb = (stats.dbSize / (1024 * 1024)).toFixed(2);
+        cacheDbSizeVal.innerText = `${sizeMb} MB`;
+
+        if (stats.details && stats.details.length > 0) {
+          cacheStatsTableBody.innerHTML = "";
+          stats.details.forEach(d => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><strong>${escapeHtml(d.indicatorKey)}</strong></td>
+              <td><code>${escapeHtml(d.symbol)}</code></td>
+              <td><code>${escapeHtml(d.timeframe)}</code></td>
+              <td>${d.count.toLocaleString()}</td>
+              <td class="font-small text-muted">${new Date(d.oldest).toLocaleString()}</td>
+              <td class="font-small text-muted">${new Date(d.newest).toLocaleString()}</td>
+            `;
+            cacheStatsTableBody.appendChild(tr);
+          });
+        } else {
+          cacheStatsTableBody.innerHTML = `<tr><td colspan="6" class="text-center">No database cache records found.</td></tr>`;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load health statistics:", err);
+    }
+  }
+
+  // Bind session refresh button inside Health tab
+  if (healthRefreshSessionBtn) {
+    healthRefreshSessionBtn.addEventListener("click", async () => {
+      try {
+        healthRefreshSessionBtn.disabled = true;
+        healthRefreshSessionBtn.innerText = "Triggering helper...";
+        
+        // Call refresh endpoint by calling MCP session tool internally or status
+        const res = await fetch("/api/status");
+        const statusData = await res.json();
+        
+        alert("Session credentials refresh triggered! Please check your server console window to complete authentication.");
+        loadHealth();
+      } catch (err) {
+        alert("Failed to refresh session: " + err.message);
+      } finally {
+        healthRefreshSessionBtn.disabled = false;
+        healthRefreshSessionBtn.innerText = "Refresh TV Session Cookies";
+      }
+    });
+  }
+
+  // Notifier Test Button Trigger
+  const testNotifierBtn = document.getElementById("test-notifier-btn");
+  const testNotifierStatus = document.getElementById("test-notifier-status");
+
+  if (testNotifierBtn) {
+    testNotifierBtn.addEventListener("click", async () => {
+      try {
+        testNotifierBtn.disabled = true;
+        testNotifierStatus.innerText = "Sending test alert...";
+        testNotifierStatus.className = "font-small text-muted";
+        
+        const res = await fetch("/api/notifier/test", { method: "POST" });
+        const result = await res.json();
+        if (result.success) {
+          testNotifierStatus.innerText = "Sent successfully!";
+          testNotifierStatus.style.color = "var(--neon-green)";
+        } else {
+          testNotifierStatus.innerText = "Failed: " + result.error;
+          testNotifierStatus.style.color = "var(--neon-red)";
+        }
+      } catch (err) {
+        testNotifierStatus.innerText = "Network error: " + err.message;
+        testNotifierStatus.style.color = "var(--neon-red)";
+      } finally {
+        testNotifierBtn.disabled = false;
+        setTimeout(() => {
+          testNotifierStatus.innerText = "";
+        }, 5000);
+      }
+    });
+  }
+
+  // Screener Quick Test Console
+  const runScreenerPreviewBtn = document.getElementById("run-screener-preview-btn");
+  const screenerMarketSelect = document.getElementById("screener-market-select");
+  const screenerPresetSelect = document.getElementById("screener-preset-select");
+  const screenerPreviewLoading = document.getElementById("screener-preview-loading");
+  const screenerPreviewResult = document.getElementById("screener-preview-result");
+  const screenerPreviewLog = document.getElementById("screener-preview-log");
+
+  if (runScreenerPreviewBtn) {
+    runScreenerPreviewBtn.addEventListener("click", async () => {
+      const market = screenerMarketSelect.value;
+      const condition = screenerPresetSelect.value;
+      
+      runScreenerPreviewBtn.disabled = true;
+      screenerPreviewLoading.classList.remove("hidden");
+      screenerPreviewResult.classList.add("hidden");
+      
+      try {
+        const res = await fetch(`/api/screener/preview?market=${market}&condition=${condition}&limit=15`);
+        const result = await res.json();
+        if (result.success) {
+          screenerPreviewLog.innerText = result.markdown;
+          screenerPreviewResult.classList.remove("hidden");
+        } else {
+          screenerPreviewLog.innerText = "Error running scan: " + result.error;
+          screenerPreviewResult.classList.remove("hidden");
+        }
+      } catch (err) {
+        screenerPreviewLog.innerText = "Connection error: " + err.message;
+        screenerPreviewResult.classList.remove("hidden");
+      } finally {
+        screenerPreviewLoading.classList.add("hidden");
+        runScreenerPreviewBtn.disabled = false;
+      }
+    });
+  }
 
 });

@@ -4,10 +4,10 @@ import subprocess
 from pathlib import Path
 import difflib
 import re
+from bridge_utils import init_io
 
-# Ensure UTF-8 stdout on Windows to prevent UnicodeEncodeError
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+# Ensure UTF-8 stdout on Windows
+init_io()
 
 ORACLE_DIR = Path(__file__).parent.resolve()
 DB_PATH = ORACLE_DIR / "pine_docs_db.json"
@@ -164,6 +164,12 @@ def validate_pine_code(code: str) -> str:
                     similar = difflib.get_close_matches(fn_call, PINE_DOCS_DATABASE.keys(), n=2, cutoff=0.55)
                     sug_str = f". Did you mean: {', '.join(f'`{s}`' for s in similar)}?" if similar else ""
                     warnings.append(f"Line {idx+1}: Unknown or typo in function call '{fn_call}'{sug_str}")
+            else:
+                # Check if it should be namespaced (e.g., rsi -> ta.rsi)
+                for ns in ["ta", "math", "request", "str", "color", "array", "matrix"]:
+                    if f"{ns}.{fn_call}" in PINE_DOCS_DATABASE or f"{ns}.{fn_call}()" in PINE_DOCS_DATABASE:
+                        warnings.append(f"Line {idx+1}: Warning: Function '{fn_call}' should be prefixed with its namespace (e.g. '{ns}.{fn_call}') in Pine Script v5/v6.")
+                        break
             
     if not has_version:
         warnings.append("Warning: Missing version compiler directive. Recommend adding '//@version=5' or '//@version=6' at the top of your script.")

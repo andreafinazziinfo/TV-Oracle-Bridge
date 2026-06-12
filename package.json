@@ -4,11 +4,17 @@
   "private": true,
   "type": "module",
   "description": "Offline TradingView indicator oracle and FastMCP Server",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "list": "node listIndicators.mjs",
     "fetch": "node fetchIndicator.mjs",
     "dashboard": "node dashboard/server.mjs",
-    "postinstall": "node apply-lib-patch.mjs"
+    "postinstall": "node apply-lib-patch.mjs",
+    "test:python": "python -m pytest tests -q",
+    "test:node": "node --test tests/node/test_cli_helpers.test.mjs tests/node/test_dashboard_api.test.mjs",
+    "test": "npm run test:python && npm run test:node"
   },
   "dependencies": {
     "@mathieuc/tradingview": "^3.5.0",
@@ -16,5 +22,8 @@
     "express": "^5.2.1",
     "playwright": "^1.44.0",
     "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
   }
 }

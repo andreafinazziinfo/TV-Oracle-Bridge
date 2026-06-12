@@ -10,6 +10,49 @@ const BROWSER_PATH = process.env.TV_BROWSER_PATH || "";
 const HEADLESS = process.env.TV_BROWSER_HEADLESS !== "false"; // default to true
 
 /**
+ * Retry helper utility to execute an operation multiple times on transient failures.
+ */
+async function withRetry(fn, maxAttempts = 3, delayMs = 2000) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Retry Engine] Attempt ${attempt} failed: ${err.message}. Retrying in ${delayMs}ms...`);
+      if (attempt < maxAttempts) {
+        await new Promise(res => setTimeout(res, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Fallback selector chain to find a valid TradingView chart area.
+ */
+async function waitForChartSelector(page, timeoutMs = 15000) {
+  const selectors = [
+    "div.chart-markup-table",
+    "canvas.interactive-playground",
+    "div.layout__area--center",
+    "div.chart-container-inner"
+  ];
+  
+  const perSelectorTimeout = Math.floor(timeoutMs / selectors.length);
+  for (const selector of selectors) {
+    try {
+      await page.waitForSelector(selector, { timeout: perSelectorTimeout });
+      console.log(`[Selector Hardening] Chart canvas detected via selector: ${selector}`);
+      return selector;
+    } catch (e) {
+      console.warn(`[Selector Hardening] Selector '${selector}' timed out. Trying next...`);
+    }
+  }
+  throw new Error("All fallback chart selectors timed out. The TradingView chart DOM structure may have changed.");
+}
+
+/**
  * Launch the configured browser instance.
  */
 export async function launchBrowser() {
@@ -17,9 +60,7 @@ export async function launchBrowser() {
     headless: HEADLESS,
     args: [
       "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-web-security",
-      "--disable-features=IsolateOrigins,site-per-process"
+      "--disable-setuid-sandbox"
     ]
   };
 
@@ -180,31 +221,33 @@ export async function captureChartScreenshot(symbol = "", timeframe = "", output
   const url = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(targetSymbol)}&interval=${targetTimeframe}`;
   console.log(`Navigating to: ${url}`);
   
-  // Navigate to TradingView chart
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-  console.log("Page loaded. Waiting for indicators to render...");
-
-  // Wait for the main chart canvas to be visible
-  try {
-    await page.waitForSelector("div.chart-markup-table, canvas.interactive-playground", { timeout: 15000 });
-  } catch (e) {
-    console.warn("Warning: Chart canvas selector timeout. Proceeding anyway.");
-  }
-
-  // Sleep an extra 5 seconds to let scripts compute and render fully
-  await page.waitForTimeout(5000);
-
-  // Define screenshot folder
   const outDir = path.resolve("./out/screenshots");
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true });
   }
-  
   const outputPath = path.join(outDir, outputName);
 
-  // Capture the main chart area
-  console.log("Capturing screenshot...");
-  await page.screenshot({ path: outputPath, fullPage: false });
+  await withRetry(async () => {
+    // Navigate to TradingView chart
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+    
+    // Check if session is expired or redirects to signin
+    const currentUrl = page.url();
+    if (currentUrl.includes("/signin") || currentUrl.includes("/login") || await page.$("input[name='username'], input[type='password']")) {
+      throw new Error("session expired: TradingView session is invalid or has expired.");
+    }
+    
+    console.log("Page loaded. Waiting for indicators to render...");
+    await waitForChartSelector(page, 15000);
+    
+    // Sleep an extra 5 seconds to let scripts compute and render fully
+    await page.waitForTimeout(5000);
+
+    // Capture the main chart area
+    console.log("Capturing screenshot...");
+    await page.screenshot({ path: outputPath, fullPage: false });
+  }, 3, 2000);
+
   console.log(`Screenshot saved successfully to: ${outputPath}`);
 
   // Apply overlays if annotations are provided
@@ -219,7 +262,19 @@ export async function captureChartScreenshot(symbol = "", timeframe = "", output
   await context.close();
   await browser.close();
 
-  return outputPath;
+  const sizeBytes = fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0;
+  
+  // Return structured JSON metadata instead of plain string
+  const metadata = {
+    path: outputPath,
+    symbol: targetSymbol,
+    timeframe: targetTimeframe,
+    timestamp: new Date().toISOString(),
+    annotationsCount: annotations ? annotations.length : 0,
+    sizeBytes: sizeBytes
+  };
+
+  return JSON.stringify(metadata);
 }
 
 

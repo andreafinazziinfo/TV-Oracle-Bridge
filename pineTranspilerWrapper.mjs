@@ -21,11 +21,9 @@ export function transpilePineScript(pineFilePath) {
 
     console.log(`[PineTS Wrapper] Launching transpiler for: ${absPath}`);
 
-    // Execute 'npx -y @luxalgo/pinets transpile <file>'
-    // -y automatically installs the package if not already cached
-    const child = spawn("npx", ["-y", "@luxalgo/pinets", absPath], {
-      shell: true
-    });
+    const child = process.platform === "win32"
+      ? spawn("cmd.exe", ["/c", "npx", "-y", "@luxalgo/pinets", absPath])
+      : spawn("npx", ["-y", "@luxalgo/pinets", absPath]);
 
     let stdout = "";
     let stderr = "";

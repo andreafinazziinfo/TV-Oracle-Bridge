@@ -4,10 +4,10 @@ import json
 import urllib.request
 import urllib.parse
 from pathlib import Path
+from bridge_utils import init_io
 
 # Ensure UTF-8 stdout
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+init_io()
 
 def send_telegram_notification(token: str, chat_id: str, message: str, filepath: str = None) -> bool:
     """Send message or photo to Telegram chat using Bot API."""

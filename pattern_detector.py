@@ -1,19 +1,23 @@
+"""
+pattern_detector.py — Candlestick pattern detection module.
+
+Identifies patterns (Doji, Hammer, Engulfing, etc.) and provides markdown reports
+and visual chart annotations.
+"""
+
 import json
 import sys
 from pathlib import Path
 from typing import List, Dict, Any
+from bridge_utils import init_io
 
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
+# Ensure UTF-8 stdout
+init_io()
 
-def analyze_ohlc_patterns(ohlc: List[Dict[str, Any]]) -> str:
-    """Analyze historical OHLC bars and detect key candlestick patterns.
-    
-    Args:
-        ohlc: List of bars, where each bar is a dict with {"time": int, "open": float, "high": float, "low": float, "close": float, "volume": float}
-    """
+def _detect_patterns(ohlc: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Private shared helper containing the logic for detecting candlestick patterns."""
     if not ohlc or len(ohlc) < 3:
-        return "Error: Insufficient OHLC data to analyze patterns (minimum 3 bars required)."
+        return []
         
     # Analyze the last 15 bars for pattern occurrences
     bars_to_analyze = ohlc[-15:]
@@ -38,59 +42,90 @@ def analyze_ohlc_patterns(ohlc: List[Dict[str, Any]]) -> str:
         
         prev_body = abs(prev["close"] - prev["open"])
         
+        pattern_type = None
+        label = ""
+        sig_type = ""
+        desc = ""
+        color = ""
+        border_color = ""
+        
+        # Color palettes for overlays
+        c_green = "rgba(16, 185, 129, 0.15)"
+        b_green = "rgb(16, 185, 129)"
+        c_red = "rgba(239, 68, 68, 0.15)"
+        b_red = "rgb(239, 68, 68)"
+        c_yellow = "rgba(245, 158, 11, 0.15)"
+        b_yellow = "rgb(245, 158, 11)"
+        
         # 1. Doji (Very small body relative to overall range)
         if body_pct < 0.10:
-            detected.append({
-                "bar_index": i,
-                "time": curr["time"],
-                "pattern": "⚖️ Doji",
-                "type": "Neutral / Indecision",
-                "description": f"Open ({curr['open']}) and Close ({curr['close']}) are virtually equal. Indicates market indecision."
-            })
+            pattern_type = "doji"
+            label = "Doji"
+            sig_type = "Neutral / Indecision"
+            desc = f"Open ({curr['open']}) and Close ({curr['close']}) are virtually equal. Indicates market indecision."
+            color = c_yellow
+            border_color = b_yellow
             
-        # 2. Hammer (Small body at top of range, long lower shadow, minimal upper shadow)
+        # 2. Hammer / Hanging Man (Small body at top, long lower shadow, minimal upper shadow)
         elif lower_shadow > (2 * body) and upper_shadow < (0.2 * body) and body_pct > 0.10 and body_pct < 0.40:
-            detected.append({
-                "bar_index": i,
-                "time": curr["time"],
-                "pattern": "🔨 Hammer" if is_bullish else "🔨 Hanging Man",
-                "type": "Bullish Reversal (if downtrend)" if is_bullish else "Bearish Reversal (if uptrend)",
-                "description": f"Long lower shadow ({lower_shadow:.2f}) indicates strong rejection of lower prices by buyers."
-            })
+            pattern_type = "hammer"
+            label = "Hammer" if is_bullish else "Hanging Man"
+            sig_type = "Bullish Reversal (if downtrend)" if is_bullish else "Bearish Reversal (if uptrend)"
+            desc = f"Long lower shadow ({lower_shadow:.2f}) indicates strong rejection of lower prices by buyers."
+            color = c_green if is_bullish else c_red
+            border_color = b_green if is_bullish else b_red
             
-        # 3. Shooting Star (Small body at bottom of range, long upper shadow, minimal lower shadow)
+        # 3. Shooting Star / Inverted Hammer (Small body at bottom, long upper shadow, minimal lower shadow)
         elif upper_shadow > (2 * body) and lower_shadow < (0.2 * body) and body_pct > 0.10 and body_pct < 0.40:
-            detected.append({
-                "bar_index": i,
-                "time": curr["time"],
-                "pattern": "🌠 Shooting Star" if is_bearish else "🌠 Inverted Hammer",
-                "type": "Bearish Reversal (if uptrend)" if is_bearish else "Bullish Reversal (if downtrend)",
-                "description": f"Long upper shadow ({upper_shadow:.2f}) indicates strong rejection of higher prices by sellers."
-            })
+            pattern_type = "shooting_star"
+            label = "Shooting Star" if is_bearish else "Inverted Hammer"
+            sig_type = "Bearish Reversal (if uptrend)" if is_bearish else "Bullish Reversal (if downtrend)"
+            desc = f"Long upper shadow ({upper_shadow:.2f}) indicates strong rejection of higher prices by sellers."
+            color = c_red if is_bearish else c_green
+            border_color = b_red if is_bearish else b_green
             
         # 4. Bullish Engulfing (Current bullish body completely engulfs previous bearish body)
         elif is_bullish and prev["close"] < prev["open"] and curr["open"] <= prev["close"] and curr["close"] >= prev["open"] and body > prev_body:
-            detected.append({
-                "bar_index": i,
-                "time": curr["time"],
-                "pattern": "🟢 Bullish Engulfing",
-                "type": "Bullish Reversal",
-                "description": f"Bullish body ({curr['open']} -> {curr['close']}) completely engulfs previous bearish candle. Strong buy signal."
-            })
+            pattern_type = "bullish_engulfing"
+            label = "Bullish Engulfing"
+            sig_type = "Bullish Reversal"
+            desc = f"Bullish body ({curr['open']} -> {curr['close']}) completely engulfs previous bearish candle. Strong buy signal."
+            color = c_green
+            border_color = b_green
             
         # 5. Bearish Engulfing (Current bearish body completely engulfs previous bullish body)
         elif is_bearish and prev["close"] > prev["open"] and curr["open"] >= prev["close"] and curr["close"] <= prev["open"] and body > prev_body:
+            pattern_type = "bearish_engulfing"
+            label = "Bearish Engulfing"
+            sig_type = "Bearish Reversal"
+            desc = f"Bearish body ({curr['open']} -> {curr['close']}) completely engulfs previous bullish candle. Strong sell signal."
+            color = c_red
+            border_color = b_red
+            
+        if pattern_type:
             detected.append({
                 "bar_index": i,
                 "time": curr["time"],
-                "pattern": "🔴 Bearish Engulfing",
-                "type": "Bearish Reversal",
-                "description": f"Bearish body ({curr['open']} -> {curr['close']}) completely engulfs previous bullish candle. Strong sell signal."
+                "pattern_type": pattern_type,
+                "label": label,
+                "sig_type": sig_type,
+                "description": desc,
+                "color": color,
+                "border_color": border_color,
+                "bar_index_from_right": len(bars_to_analyze) - 1 - i
             })
+            
+    return detected
 
+def analyze_ohlc_patterns(ohlc: List[Dict[str, Any]]) -> str:
+    """Analyze historical OHLC bars and detect key candlestick patterns, returning a markdown table."""
+    if not ohlc or len(ohlc) < 3:
+        return "Error: Insufficient OHLC data to analyze patterns (minimum 3 bars required)."
+        
+    detected = _detect_patterns(ohlc)
     if not detected:
         return "No clear candlestick patterns (Doji, Hammer, Engulfing, etc.) detected in the analyzed range."
-
+        
     # Format into markdown table
     lines = [
         "### Candlestick Pattern Report (Last 15 Bars)",
@@ -99,7 +134,16 @@ def analyze_ohlc_patterns(ohlc: List[Dict[str, Any]]) -> str:
         "| :--- | :--- | :--- | :--- |"
     ]
     for d in detected:
-        lines.append(f"| {d['time']} | **{d['pattern']}** | {d['type']} | {d['description']} |")
+        # Match original emoji formatting
+        emoji_map = {
+            "doji": "⚖️ Doji",
+            "hammer": "🔨 Hammer" if "Hammer" in d["label"] else "🔨 Hanging Man",
+            "shooting_star": "🌠 Shooting Star" if "Shooting Star" in d["label"] else "🌠 Inverted Hammer",
+            "bullish_engulfing": "🟢 Bullish Engulfing",
+            "bearish_engulfing": "🔴 Bearish Engulfing"
+        }
+        pat_name = emoji_map.get(d["pattern_type"], d["label"])
+        lines.append(f"| {d['time']} | **{pat_name}** | {d['sig_type']} | {d['description']} |")
         
     return "\n".join(lines)
 
@@ -123,80 +167,17 @@ def detect_from_oracle_file(file_path: str) -> str:
 
 def get_candlestick_annotations(ohlc: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Detect key patterns on the last 15 bars and return Playwright-compatible annotation objects."""
-    if not ohlc or len(ohlc) < 3:
-        return []
-        
-    bars_to_analyze = ohlc[-15:]
+    detected = _detect_patterns(ohlc)
     annotations = []
-    
-    for i in range(1, len(bars_to_analyze)):
-        curr = bars_to_analyze[i]
-        prev = bars_to_analyze[i-1]
-        
-        body = abs(curr["close"] - curr["open"])
-        candle_range = curr["high"] - curr["low"]
-        if candle_range == 0:
-            continue
-            
-        body_pct = body / candle_range
-        upper_shadow = curr["high"] - max(curr["close"], curr["open"])
-        lower_shadow = min(curr["close"], curr["open"]) - curr["low"]
-        
-        is_bullish = curr["close"] > curr["open"]
-        is_bearish = curr["close"] < curr["open"]
-        
-        prev_body = abs(prev["close"] - prev["open"])
-        
-        bar_idx_from_right = len(bars_to_analyze) - 1 - i
-        
-        # Color palettes
-        c_green = "rgba(16, 185, 129, 0.15)"
-        b_green = "rgb(16, 185, 129)"
-        c_red = "rgba(239, 68, 68, 0.15)"
-        b_red = "rgb(239, 68, 68)"
-        c_yellow = "rgba(245, 158, 11, 0.15)"
-        b_yellow = "rgb(245, 158, 11)"
-        
-        if body_pct < 0.10:
-            annotations.append({
-                "barIndexFromRight": bar_idx_from_right,
-                "color": c_yellow,
-                "borderColor": b_yellow,
-                "label": "Doji"
-            })
-        elif lower_shadow > (2 * body) and upper_shadow < (0.2 * body) and body_pct > 0.10 and body_pct < 0.40:
-            annotations.append({
-                "barIndexFromRight": bar_idx_from_right,
-                "color": c_green if is_bullish else c_red,
-                "borderColor": b_green if is_bullish else b_red,
-                "label": "Hammer" if is_bullish else "Hanging Man"
-            })
-        elif upper_shadow > (2 * body) and lower_shadow < (0.2 * body) and body_pct > 0.10 and body_pct < 0.40:
-            annotations.append({
-                "barIndexFromRight": bar_idx_from_right,
-                "color": c_red if is_bearish else c_green,
-                "borderColor": b_red if is_bearish else b_green,
-                "label": "Shooting Star" if is_bearish else "Inverted Hammer"
-            })
-        elif is_bullish and prev["close"] < prev["open"] and curr["open"] <= prev["close"] and curr["close"] >= prev["open"] and body > prev_body:
-            annotations.append({
-                "barIndexFromRight": bar_idx_from_right,
-                "color": c_green,
-                "borderColor": b_green,
-                "label": "Bullish Engulfing"
-            })
-        elif is_bearish and prev["close"] > prev["open"] and curr["open"] >= prev["close"] and curr["close"] <= prev["open"] and body > prev_body:
-            annotations.append({
-                "barIndexFromRight": bar_idx_from_right,
-                "color": c_red,
-                "borderColor": b_red,
-                "label": "Bearish Engulfing"
-            })
-              
+    for d in detected:
+        annotations.append({
+            "barIndexFromRight": d["bar_index_from_right"],
+            "color": d["color"],
+            "borderColor": d["border_color"],
+            "label": d["label"]
+        })
     return annotations
 
 if __name__ == "__main__":
-    import sys
     path = sys.argv[1] if len(sys.argv) > 1 else "out/completa.json"
     print(detect_from_oracle_file(path))
-

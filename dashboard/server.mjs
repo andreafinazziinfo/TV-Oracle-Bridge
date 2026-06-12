@@ -1,11 +1,11 @@
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import sqlite3 from "sqlite3"; // Use sqlite3 for database status check since we just installed it or can load it
 
-const execPromise = promisify(exec);
+const execFileAsync = promisify(execFile);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -26,12 +26,194 @@ app.use(express.static(path.join(rootDir, "dashboard/public")));
 // Serve screenshots directly under /screenshots
 app.use("/screenshots", express.static(screenshotsDir));
 
+const statePath = path.join(rootDir, "daemon_state.json");
+
+// Helper to save daemon state to disk
+async function saveDaemonState() {
+  try {
+    const state = {
+      isRunning: isDaemonRunning,
+      intervalMinutes: currentIntervalMinutes
+    };
+    await fs.promises.writeFile(statePath, JSON.stringify(state, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save daemon state:", err);
+  }
+}
+
 // Helper: Mask session cookie
 function maskSession(session) {
   if (!session) return "Not Configured";
   if (session.length <= 12) return "Configured (Too Short)";
   return `${session.substring(0, 6)}...${session.substring(session.length - 6)}`;
 }
+
+// Helper: Validate indicator key to prevent path traversal
+function sanitizeKey(key) {
+  if (!key || /[^a-zA-Z0-9_\-]/.test(key)) {
+    return null;
+  }
+  return key;
+}
+
+// 0. GET /api/health - Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    version: '1.2.0',
+    timestamp: new Date().toISOString(),
+    node: process.version
+  });
+});
+
+// GET /api/session/validate - Validate TradingView session cookie validity
+app.get("/api/session/validate", async (req, res) => {
+  try {
+    const tvSession = process.env.TV_SESSION;
+    const tvSessionSign = process.env.TV_SESSION_SIGN;
+    
+    if (!tvSession || tvSession === "Not Configured") {
+      return res.json({
+        success: true,
+        valid: false,
+        reason: "No TV_SESSION cookie configured in .env",
+        countdownHtml: "<span class='badge badge-red'>Expired / Missing</span>"
+      });
+    }
+    
+    const signinUrl = "https://www.tradingview.com/accounts/signin/status/";
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Cookie": `sessionid=${tvSession}${tvSessionSign && tvSessionSign !== "Not Configured" ? '; sessionid_sign=' + tvSessionSign : ''}`
+    };
+    
+    const response = await fetch(signinUrl, { headers });
+    if (!response.ok) {
+      return res.json({
+        success: true,
+        valid: false,
+        reason: `TradingView API returned HTTP status ${response.status}`,
+        countdownHtml: "<span class='badge badge-red'>Expired</span>"
+      });
+    }
+    
+    const data = await response.json();
+    const username = data.user?.username;
+    
+    if (!username) {
+      return res.json({
+        success: true,
+        valid: false,
+        reason: "Invalid session cookie (unauthorized response from TradingView)",
+        countdownHtml: "<span class='badge badge-red'>Expired</span>"
+      });
+    }
+    
+    let remainingDays = 90;
+    const envPath = path.resolve("./.env");
+    if (fs.existsSync(envPath)) {
+      const stat = fs.statSync(envPath);
+      const mtime = stat.mtime;
+      const elapsedMs = Date.now() - mtime.getTime();
+      const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+      remainingDays = Math.max(0, 90 - elapsedDays);
+    }
+    
+    let colorClass = "green";
+    if (remainingDays <= 1) {
+      colorClass = "red";
+    } else if (remainingDays <= 7) {
+      colorClass = "yellow";
+    }
+    
+    res.json({
+      success: true,
+      valid: true,
+      username,
+      remainingDays,
+      countdownHtml: `<span class="badge badge-${colorClass}">${remainingDays.toFixed(1)} days remaining (${username})</span>`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/screener/preview - Proxy for screener preset queries
+app.get("/api/screener/preview", async (req, res) => {
+  try {
+    const market = req.query.market || "crypto";
+    const condition = req.query.condition || "top_volume";
+    const limit = parseInt(req.query.limit || "15", 10);
+    
+    const { stdout } = await execFileAsync('python', ['screener.py', market, condition, limit.toString()], { cwd: rootDir });
+    res.json({ success: true, markdown: stdout });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/notifier/test - Send a test notification to webhooks
+app.post("/api/notifier/test", async (req, res) => {
+  try {
+    const msg = "🔔 [Test] This is a test notification from the TV-Oracle-Bridge Dashboard Technical Console.";
+    await execFileAsync('python', ['notifier.py', msg], { cwd: rootDir });
+    res.json({ success: true, message: "Test notification sent successfully." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/cache/stats - Retrieve database details
+app.get("/api/cache/stats", async (req, res) => {
+  try {
+    const stats = {
+      dbExists: fs.existsSync(dbPath),
+      dbSize: 0,
+      totalRows: 0,
+      details: []
+    };
+    
+    if (stats.dbExists) {
+      const fsStats = fs.statSync(dbPath);
+      stats.dbSize = fsStats.size;
+      
+      const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
+      
+      const getStats = () => {
+        return new Promise((resolve, reject) => {
+          db.all(`
+            SELECT indicator_key, symbol, timeframe, COUNT(*) as count, MIN(time) as min_time, MAX(time) as max_time 
+            FROM bars 
+            GROUP BY indicator_key, symbol, timeframe
+          `, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          });
+        });
+      };
+      
+      const rows = await getStats();
+      db.close();
+      
+      stats.details = rows.map(r => {
+        stats.totalRows += r.count;
+        return {
+          indicatorKey: r.indicator_key,
+          symbol: r.symbol,
+          timeframe: r.timeframe,
+          count: r.count,
+          oldest: r.min_time ? new Date(r.min_time * 1000).toISOString() : "N/A",
+          newest: r.max_time ? new Date(r.max_time * 1000).toISOString() : "N/A"
+        };
+      });
+    }
+    
+    res.json({ success: true, stats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // 1. GET /api/status - Retrieve system configuration and cache stats
 app.get("/api/status", async (req, res) => {
@@ -106,7 +288,7 @@ app.get("/api/screenshots", (req, res) => {
 });
 
 // 3. GET /api/indicators - List indicator JSON data files in out/
-app.get("/api/indicators", (req, res) => {
+app.get("/api/indicators", async (req, res) => {
   try {
     if (!fs.existsSync(outDir)) {
       return res.json({ success: true, indicators: [] });
@@ -118,13 +300,13 @@ app.get("/api/indicators", (req, res) => {
     for (const f of files) {
       if (!f.endsWith(".json")) continue;
       // Exclude config or packages
-      if (["package.json", "package-lock.json", "indicators.json", "indicators.local.json", "indicators.local.example.json"].includes(f)) {
+      if (["package.json", "package-lock.json", "indicators.json", "indicators.local.json", "indicators.local.example.json", "daemon_state.json"].includes(f)) {
         continue;
       }
 
       const filePath = path.join(outDir, f);
       try {
-        const fileContent = fs.readFileSync(filePath, "utf8");
+        const fileContent = await fs.promises.readFile(filePath, "utf8");
         const data = JSON.parse(fileContent);
         
         // Basic duck-typing check to verify it contains TV oracle indicator structure
@@ -150,14 +332,17 @@ app.get("/api/indicators", (req, res) => {
 });
 
 // Helper route to serve a specific indicator's full JSON
-app.get("/api/indicators/:key", (req, res) => {
+app.get("/api/indicators/:key", async (req, res) => {
   try {
-    const key = req.params.key;
+    const key = sanitizeKey(req.params.key);
+    if (!key) {
+      return res.status(400).json({ success: false, error: "Invalid indicator key." });
+    }
     const filePath = path.join(outDir, `${key}.json`);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, error: "Indicator cache file not found." });
     }
-    const content = fs.readFileSync(filePath, "utf8");
+    const content = await fs.promises.readFile(filePath, "utf8");
     res.json({ success: true, data: JSON.parse(content) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -165,7 +350,7 @@ app.get("/api/indicators/:key", (req, res) => {
 });
 
 // 4. GET /api/docs - Search the Pine Script documentation database
-app.get("/api/docs", (req, res) => {
+app.get("/api/docs", async (req, res) => {
   try {
     const query = (req.query.q || "").trim().toLowerCase();
     
@@ -177,7 +362,7 @@ app.get("/api/docs", (req, res) => {
       });
     }
 
-    const dbContent = fs.readFileSync(docsDbPath, "utf8");
+    const dbContent = await fs.promises.readFile(docsDbPath, "utf8");
     const docsDb = JSON.parse(dbContent);
 
     if (!query) {
@@ -220,8 +405,7 @@ app.post("/api/download", async (req, res) => {
     console.log(`[Dashboard API] Requesting download for URL: ${url} -> ${scriptName}`);
 
     // Command to execute remoteControl.mjs in download mode
-    const cmd = `node remoteControl.mjs download "${url}" "${scriptName}"`;
-    const { stdout, stderr } = await execPromise(cmd, { cwd: rootDir });
+    const { stdout, stderr } = await execFileAsync('node', ['remoteControl.mjs', 'download', url, scriptName], { cwd: rootDir });
 
     if (stderr && stderr.includes("Error")) {
       return res.json({ success: false, error: stderr });
@@ -257,8 +441,7 @@ function logDaemon(msg) {
 
 async function sendSystemNotification(msg) {
   try {
-    const cmd = `python notifier.py "${msg.replace(/"/g, '\\"')}"`;
-    await execPromise(cmd, { cwd: rootDir });
+    await execFileAsync('python', ['notifier.py', msg], { cwd: rootDir });
   } catch (err) {
     // Ignore notification failures
   }
@@ -273,7 +456,7 @@ async function runRefreshCycle() {
       sendSystemNotification("⚠️ [Auto-Refresher] Caching skipped: indicators.local.json not found.");
       return;
     }
-    const cfgContent = fs.readFileSync(localCfgPath, "utf8");
+    const cfgContent = await fs.promises.readFile(localCfgPath, "utf8");
     const cfg = JSON.parse(cfgContent);
     const keys = Object.keys(cfg);
     logDaemon(`Found ${keys.length} indicators in config: ${keys.join(", ")}`);
@@ -281,9 +464,8 @@ async function runRefreshCycle() {
     for (const key of keys) {
       logDaemon(`Refreshing cache for indicator: ${key}...`);
       // We call fetchIndicator.mjs with range 100 and waitMs 8000 for fast delta-sync
-      const cmd = `node fetchIndicator.mjs ${key} 100 8000`;
       try {
-        const { stdout } = await execPromise(cmd, { cwd: rootDir });
+        const { stdout } = await execFileAsync('node', ['fetchIndicator.mjs', key, '100', '8000'], { cwd: rootDir });
         logDaemon(`Success: Refreshed '${key}'.`);
       } catch (err) {
         logDaemon(`Error: Failed refreshing '${key}': ${err.message}`);
@@ -310,15 +492,20 @@ app.get("/api/daemon/status", (req, res) => {
 });
 
 // 7. POST /api/daemon/start - Start the background caching daemon
-app.post("/api/daemon/start", (req, res) => {
+app.post("/api/daemon/start", async (req, res) => {
   if (isDaemonRunning) {
     return res.json({ success: true, message: "Daemon is already running." });
   }
-  const mins = parseInt(req.body.intervalMinutes || "15", 10);
+  const mins = parseInt(req.body.intervalMinutes ?? "15", 10);
+  if (isNaN(mins) || mins < 1 || mins > 1440) {
+    return res.status(400).json({ success: false, error: "intervalMinutes must be between 1 and 1440." });
+  }
   currentIntervalMinutes = mins;
   isDaemonRunning = true;
   logDaemon(`Daemon started. Interval set to: ${mins} minutes.`);
   sendSystemNotification(`⚡ [Auto-Refresher] Background Caching Daemon started (Interval: ${mins}m).`);
+  
+  await saveDaemonState();
   
   // Run first cycle immediately
   runRefreshCycle();
@@ -335,7 +522,7 @@ app.post("/api/daemon/start", (req, res) => {
 });
 
 // 8. POST /api/daemon/stop - Stop the background caching daemon
-app.post("/api/daemon/stop", (req, res) => {
+app.post("/api/daemon/stop", async (req, res) => {
   if (!isDaemonRunning) {
     return res.json({ success: true, message: "Daemon is not running." });
   }
@@ -345,13 +532,49 @@ app.post("/api/daemon/stop", (req, res) => {
   nextRunTime = null;
   logDaemon("Daemon stopped.");
   sendSystemNotification("🛑 [Auto-Refresher] Background Caching Daemon stopped.");
+  
+  await saveDaemonState();
+  
   res.json({ success: true, message: "Daemon stopped successfully." });
 });
 
-// Start listening
-app.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 TV-Oracle-Bridge Dashboard Server running locally`);
-  console.log(`🔗 Address: http://localhost:${PORT}`);
-  console.log(`=======================================================`);
-});
+if (process.argv[1] && (process.argv[1].endsWith("server.mjs") || process.argv[1].endsWith("server.js"))) {
+  // Auto-load daemon state
+  try {
+    if (fs.existsSync(statePath)) {
+      const stateContent = fs.readFileSync(statePath, "utf8");
+      const state = JSON.parse(stateContent);
+      if (state.isRunning) {
+        currentIntervalMinutes = state.intervalMinutes || 15;
+        isDaemonRunning = true;
+        logDaemon(`Daemon auto-resuming from persisted state. Interval: ${currentIntervalMinutes}m`);
+        
+        // Run first cycle immediately
+        runRefreshCycle();
+        
+        // Schedule subsequent cycles
+        autoRefreshInterval = setInterval(() => {
+          runRefreshCycle();
+          nextRunTime = new Date(Date.now() + currentIntervalMinutes * 60 * 1000);
+        }, currentIntervalMinutes * 60 * 1000);
+        
+        nextRunTime = new Date(Date.now() + currentIntervalMinutes * 60 * 1000);
+        sendSystemNotification(`⚡ [Auto-Refresher] Background Caching Daemon auto-resumed (Interval: ${currentIntervalMinutes}m).`);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to restore daemon state:", err);
+  }
+}
+
+// Start listening if run directly
+if (process.argv[1] && (process.argv[1].endsWith("server.mjs") || process.argv[1].endsWith("server.js"))) {
+  app.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`🚀 TV-Oracle-Bridge Dashboard Server running locally`);
+    console.log(`🔗 Address: http://localhost:${PORT}`);
+    console.log(`=======================================================`);
+  });
+}
+
+export { app };
