@@ -12,6 +12,10 @@
   Bridges real-time TradingView study executions (plots, graphic objects, strategies) to local AI agents and quantitative analysis scripts.
 </p>
 
+<p align="center">
+  <img src="docs/images/bridge_animation.svg" alt="TV Oracle Bridge Animation" width="100%" style="max-width: 800px;" />
+</p>
+
 </div>
 
 ---

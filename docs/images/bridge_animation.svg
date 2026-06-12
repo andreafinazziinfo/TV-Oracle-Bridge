@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="100%" height="100%">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="tv-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e90ff" />
+      <stop offset="100%" stop-color="#00f2fe" />
+    </linearGradient>
+    <linearGradient id="bridge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="flow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+
+    <!-- Glow Filters -->
+    <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="glow-purple" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Animations -->
+    <style>
+      .pulse-node {
+        animation: pulse 2.5s infinite alternate ease-in-out;
+      }
+      .dash-flow {
+        stroke-dasharray: 15, 30;
+        animation: flow 30s linear infinite;
+      }
+      .data-packet {
+        animation: movePacket 4s infinite linear;
+      }
+      .packet-1 { animation-delay: 0s; }
+      .packet-2 { animation-delay: 1.33s; }
+      .packet-3 { animation-delay: 2.66s; }
+
+      @keyframes pulse {
+        0% { transform: scale(0.98); opacity: 0.9; }
+        100% { transform: scale(1.02); opacity: 1; filter: drop-shadow(0 0 12px rgba(0, 242, 254, 0.6)); }
+      }
+      @keyframes flow {
+        to {
+          stroke-dashoffset: -1000;
+        }
+      }
+      @keyframes movePacket {
+        0% {
+          offset-distance: 0%;
+          opacity: 0;
+          r: 3;
+        }
+        10% {
+          opacity: 1;
+          r: 5;
+        }
+        90% {
+          opacity: 1;
+          r: 5;
+        }
+        100% {
+          offset-distance: 100%;
+          opacity: 0;
+          r: 3;
+        }
+      }
+    </style>
+  </defs>
+
+  <!-- Background container for dark mode elegance -->
+  <rect width="100%" height="100%" fill="#0d0e15" rx="12" />
+
+  <!-- Connecting Bridge Paths -->
+  <path id="bridge-path-1" d="M 190 150 C 320 80, 480 220, 610 150" fill="none" stroke="#2a2d44" stroke-width="6" />
+  <path d="M 190 150 C 320 80, 480 220, 610 150" fill="none" stroke="url(#flow-grad)" stroke-width="3" opacity="0.4" />
+  
+  <!-- Animated dash line -->
+  <path d="M 190 150 C 320 80, 480 220, 610 150" fill="none" stroke="url(#flow-grad)" stroke-width="2" class="dash-flow" />
+
+  <!-- Animated Data Packets traveling along the path -->
+  <circle fill="#00f2fe" filter="url(#glow-cyan)" class="data-packet packet-1">
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 190 150 C 320 80, 480 220, 610 150" />
+  </circle>
+  <circle fill="#8b5cf6" filter="url(#glow-purple)" class="data-packet packet-2">
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 190 150 C 320 80, 480 220, 610 150" />
+  </circle>
+  <circle fill="#ec4899" filter="url(#glow-purple)" class="data-packet packet-3">
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 190 150 C 320 80, 480 220, 610 150" />
+  </circle>
+
+  <!-- Left Node: TradingView Platform -->
+  <g transform="translate(130, 150)" class="pulse-node">
+    <!-- Outer Glow ring -->
+    <circle r="60" fill="rgba(30, 144, 255, 0.05)" stroke="rgba(30, 144, 255, 0.2)" stroke-width="1.5" />
+    <circle r="48" fill="#131722" stroke="url(#tv-grad)" stroke-width="2" filter="url(#glow-cyan)" />
+    
+    <!-- Stylized TradingView Chart Logo -->
+    <g transform="translate(-25, -25) scale(1.1)">
+      <!-- Grid Lines -->
+      <line x1="5" y1="40" x2="40" y2="40" stroke="#2a2e39" stroke-width="1" />
+      <line x1="5" y1="25" x2="40" y2="25" stroke="#2a2e39" stroke-width="1" />
+      <line x1="5" y1="10" x2="40" y2="10" stroke="#2a2e39" stroke-width="1" />
+      <!-- Chart line -->
+      <path d="M 5 35 L 15 20 L 25 30 L 38 12" fill="none" stroke="#1e90ff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Trendline nodes -->
+      <circle cx="5" cy="35" r="2.5" fill="#00f2fe" />
+      <circle cx="15" cy="20" r="2.5" fill="#00f2fe" />
+      <circle cx="25" cy="30" r="2.5" fill="#00f2fe" />
+      <circle cx="38" cy="12" r="3.5" fill="#ffffff" filter="url(#glow-cyan)" />
+    </g>
+    <text y="75" fill="#cbd5e1" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">TradingView API</text>
+  </g>
+
+  <!-- Right Node: TV-Oracle-Bridge (SQLite / MCP / AI Console) -->
+  <g transform="translate(670, 150)" class="pulse-node" style="animation-delay: 1.2s;">
+    <!-- Outer Glow ring -->
+    <circle r="60" fill="rgba(139, 92, 246, 0.05)" stroke="rgba(139, 92, 246, 0.2)" stroke-width="1.5" />
+    <circle r="48" fill="#151324" stroke="url(#bridge-grad)" stroke-width="2" filter="url(#glow-purple)" />
+    
+    <!-- Oracle / Terminal / Database representation -->
+    <g transform="translate(-20, -22) scale(1.1)">
+      <!-- Database Cylinder Top -->
+      <path d="M 5 10 C 5 5, 31 5, 31 10 C 31 15, 5 15, 5 10 Z" fill="#8b5cf6" opacity="0.8" />
+      <!-- Database Cylinder Middle -->
+      <path d="M 5 10 L 5 22 C 5 27, 31 27, 31 22 L 31 10" fill="none" stroke="#8b5cf6" stroke-width="2" />
+      <path d="M 5 16 C 5 21, 31 21, 31 16" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3,3" />
+      <!-- Database Cylinder Bottom -->
+      <path d="M 5 22 L 5 34 C 5 39, 31 39, 31 34 L 31 22" fill="none" stroke="#8b5cf6" stroke-width="2" />
+      <path d="M 5 28 C 5 33, 31 33, 31 28" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3,3" />
+      <!-- Glowing base dot -->
+      <circle cx="18" cy="10" r="2" fill="#ffffff" />
+    </g>
+    <text y="75" fill="#cbd5e1" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">TV-Oracle-Bridge</text>
+  </g>
+
+  <!-- Labels -->
+  <text x="400" y="70" fill="#8892b0" font-family="system-ui, sans-serif" font-size="13" font-weight="500" text-anchor="middle">
+    MCP Data Tunnel
+  </text>
+  <path d="M 320 80 L 480 80" stroke="#2a2d44" stroke-width="1" stroke-dasharray="4,4" />
+</svg>
