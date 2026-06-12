@@ -1,9 +1,13 @@
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+
 import { promisify } from "node:util";
 import sqlite3 from "sqlite3"; // Use sqlite3 for database status check since we just installed it or can load it
+import { transpilePineToJS } from "../transpiler_helper.mjs";
+import { PineTS } from "pinets";
+
 
 const execFileAsync = promisify(execFile);
 const app = express();
@@ -88,6 +92,228 @@ app.get("/api/health", (req, res) => {
     node: process.version
   });
 });
+
+// POST /api/transpile/indicator - Transpiles Pine indicator to JS
+app.post("/api/transpile/indicator", (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ success: false, error: "Missing 'code' parameter in request body." });
+  }
+  
+  const result = transpilePineToJS(code);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// POST /api/indicator/run - Runs indicator locally on OHLCV using PineTS
+app.post("/api/indicator/run", async (req, res) => {
+  const { code, ohlcv } = req.body;
+  if (!code || !ohlcv || !Array.isArray(ohlcv)) {
+    return res.status(400).json({ success: false, error: "Missing 'code' or 'ohlcv' array in request body." });
+  }
+
+  try {
+    // Reformat ohlcv array for PineTS
+    const pinetsCandles = ohlcv.map((bar, i) => {
+      const t = bar.timestamp || bar.time || bar[0] || Date.now();
+      const openTime = t * 1000; // if unix timestamp (seconds), convert to ms
+      const closeTime = openTime + 59 * 1000;
+      return {
+        openTime,
+        open: bar.open || bar[1] || 0,
+        high: bar.high || bar[2] || 0,
+        low: bar.low || bar[3] || 0,
+        close: bar.close || bar[4] || 0,
+        volume: bar.volume || bar[5] || 0,
+        closeTime
+      };
+    });
+
+    const p = new PineTS(pinetsCandles);
+    const ctx = await p.run(code);
+    
+    // Extract plots
+    const plots = {};
+    if (ctx && ctx.plots) {
+      for (const [key, plot] of Object.entries(ctx.plots)) {
+        plots[key] = {
+          title: plot.title || key,
+          color: plot.color || "rgba(0, 242, 254, 1)",
+          data: (plot.data || []).map((d, index) => {
+            const bar = ohlcv[index];
+            const t = bar ? (bar.timestamp || bar.time || bar[0]) : (d.time / 1000);
+            return {
+              time: t,
+              value: isNaN(d.value) || d.value === null ? null : d.value
+            };
+          })
+        };
+      }
+    }
+
+    // Also transpile with pine-transpiler to return raw JS code for user visualization/inspection
+    let transpiledJS = "";
+    try {
+      const transpileResult = transpilePineToJS(code);
+      if (transpileResult.success) {
+        transpiledJS = transpileResult.jsCode;
+      }
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      plots,
+      transpiledJS
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// POST /api/transpile/strategy - Compiles Pine strategy to C++
+app.post("/api/transpile/strategy", async (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ success: false, error: "Missing 'code' parameter in request body." });
+  }
+  
+  try {
+    const pythonProc = spawn("python", ["-c", "import pineforge_codegen; import sys; print(pineforge_codegen.transpile(sys.stdin.read()))"]);
+    
+    let stdoutData = "";
+    let stderrData = "";
+    
+    pythonProc.stdout.on("data", (data) => { stdoutData += data; });
+    pythonProc.stderr.on("data", (data) => { stderrData += data; });
+    
+    pythonProc.on("close", (exitCode) => {
+      if (exitCode === 0) {
+        res.json({ success: true, cppCode: stdoutData });
+      } else {
+        res.status(400).json({ success: false, error: stderrData || "Compilation failed." });
+      }
+    });
+    
+    pythonProc.stdin.write(code);
+    pythonProc.stdin.end();
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/backtest/run - Runs strategy backtest using PineForge Docker image
+app.post("/api/backtest/run", async (req, res) => {
+  const { code, ohlcv, inputs, overrides, runtime } = req.body;
+  if (!code || !ohlcv || !Array.isArray(ohlcv)) {
+    return res.status(400).json({ success: false, error: "Missing 'code' or 'ohlcv' array in request body." });
+  }
+
+  const tempCsvName = `temp_${Date.now()}_${Math.floor(Math.random() * 1000)}.csv`;
+  const csvFilePath = path.join(outDir, tempCsvName);
+
+  try {
+    // Write OHLCV array to CSV
+    const header = "timestamp,open,high,low,close,volume\n";
+    const rows = ohlcv.map(bar => {
+      const t = bar.timestamp || bar.time || bar[0] || 0;
+      const o = bar.open || bar[1] || 0;
+      const h = bar.high || bar[2] || 0;
+      const l = bar.low || bar[3] || 0;
+      const c = bar.close || bar[4] || 0;
+      const v = bar.volume || bar[5] || 0;
+      return `${t},${o},${h},${l},${c},${v}`;
+    }).join("\n");
+
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
+    await fs.promises.writeFile(csvFilePath, header + rows, "utf8");
+
+    // Spawn docker container
+    const dockerProc = spawn("docker", [
+      "run",
+      "--rm",
+      "-i",
+      "-v",
+      `${outDir}:/work`,
+      "ghcr.io/pineforge-4pass/pineforge-codegen-mcp:latest"
+    ]);
+
+    let stdoutData = "";
+    let stderrData = "";
+
+    dockerProc.stdout.on("data", (data) => { stdoutData += data; });
+    dockerProc.stderr.on("data", (data) => { stderrData += data; });
+
+    dockerProc.on("close", async (exitCode) => {
+      // Clean up the temp CSV file
+      try {
+        if (fs.existsSync(csvFilePath)) {
+          await fs.promises.unlink(csvFilePath);
+        }
+      } catch (err) {
+        console.error("Failed to delete temp CSV file:", err);
+      }
+
+      if (exitCode !== 0) {
+        return res.status(500).json({ success: false, error: stderrData || "Docker backtest process exited with error." });
+      }
+
+      try {
+        // Parse the JSON-RPC response
+        const response = JSON.parse(stdoutData.trim());
+        if (response.error) {
+          return res.status(400).json({ success: false, error: response.error.message || "JSON-RPC error during backtest." });
+        }
+
+        const content = response.result?.content;
+        if (!content || !content[0] || typeof content[0].text !== "string") {
+          return res.status(500).json({ success: false, error: "Invalid response content format from backtest engine." });
+        }
+
+        // Parse the inner backtest report JSON
+        const report = JSON.parse(content[0].text);
+        res.json({ success: true, report });
+      } catch (err) {
+        res.status(500).json({ success: false, error: `Failed to parse backtest results: ${err.message}`, rawOutput: stdoutData });
+      }
+    });
+
+    // Write JSON-RPC request to stdin
+    const request = {
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: {
+        name: "backtest_pine",
+        arguments: {
+          source: code,
+          ohlcv_csv_path: `/work/${tempCsvName}`,
+          inputs: inputs || {},
+          overrides: overrides || {},
+          runtime: runtime || {}
+        }
+      },
+      id: 1
+    };
+
+    dockerProc.stdin.write(JSON.stringify(request) + "\n");
+    dockerProc.stdin.end();
+
+  } catch (err) {
+    try {
+      if (fs.existsSync(csvFilePath)) {
+        await fs.promises.unlink(csvFilePath);
+      }
+    } catch (_) {}
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 
 // GET /api/screener/presets - Load custom presets from disk
 app.get("/api/screener/presets", async (req, res) => {
@@ -306,6 +532,50 @@ app.get("/api/cache/stats", async (req, res) => {
     }
     
     res.json({ success: true, stats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/cache/bars - Fetch cached bars for sandbox
+app.get("/api/cache/bars", async (req, res) => {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      return res.json({ success: true, bars: [] });
+    }
+    const limit = parseInt(req.query.limit || "300", 10);
+    const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
+    
+    const query = `
+      SELECT time, open, high, low, close, volume 
+      FROM bars 
+      ORDER BY time DESC 
+      LIMIT ?
+    `;
+    
+    const getBars = () => {
+      return new Promise((resolve, reject) => {
+        db.all(query, [limit], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+    };
+    
+    const rows = await getBars();
+    db.close();
+    
+    // Reverse to chronological order (ascending) for charts
+    const bars = rows.map(r => ({
+      time: r.time,
+      open: r.open,
+      high: r.high,
+      low: r.low,
+      close: r.close,
+      volume: r.volume
+    })).reverse();
+    
+    res.json({ success: true, bars });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

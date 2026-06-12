@@ -13,11 +13,12 @@
     "dashboard": "node dashboard/server.mjs",
     "postinstall": "node apply-lib-patch.mjs",
     "test:python": "python -m pytest tests -q",
-    "test:node": "node --test tests/node/test_cli_helpers.test.mjs tests/node/test_dashboard_api.test.mjs tests/node/test_pine_parity.test.mjs tests/node/test_dashboard_edge_cases.test.mjs",
+    "test:node": "node --test tests/node/test_cli_helpers.test.mjs tests/node/test_dashboard_api.test.mjs tests/node/test_pine_parity.test.mjs tests/node/test_dashboard_edge_cases.test.mjs tests/node/test_sandbox_api.test.mjs",
     "test": "npm run test:python && npm run test:node"
   },
   "dependencies": {
     "@mathieuc/tradingview": "^3.5.0",
+    "@opus-aether-ai/pine-transpiler": "^0.4.8",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
     "pinets": "^0.9.22",

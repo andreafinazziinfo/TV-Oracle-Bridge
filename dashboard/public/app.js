@@ -74,6 +74,9 @@ document.addEventListener("DOMContentLoaded", () => {
       case "logs-tab":
         loadSystemLogs();
         break;
+      case "sandbox-tab":
+        loadSandboxTab();
+        break;
     }
   }
 
@@ -1182,6 +1185,382 @@ ${result.error}`;
         systemLogsBox.innerText = "Logs cleared by user.";
       }
     });
+  }
+
+  // ==========================================
+  // LOCAL SANDBOX & VISUALIZATION
+  // ==========================================
+  let chart = null;
+  let candlestickSeries = null;
+  let volumeSeries = null;
+  let lineSeriesMap = new Map();
+
+  function initSandboxChart() {
+    const container = document.getElementById("sandbox-chart-container");
+    if (!container) return;
+
+    const noDataDiv = document.getElementById("chart-no-data");
+    if (noDataDiv) noDataDiv.style.display = "none";
+
+    if (chart) {
+      try {
+        chart.remove();
+      } catch (err) {
+        console.error("Failed to remove chart:", err);
+      }
+      chart = null;
+      candlestickSeries = null;
+      volumeSeries = null;
+      lineSeriesMap.clear();
+    }
+
+    chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: 320,
+      layout: {
+        background: { type: 'solid', color: '#0c1015' },
+        textColor: '#a5a6a9',
+      },
+      grid: {
+        vertLines: { color: 'rgba(42, 46, 57, 0.3)' },
+        horzLines: { color: 'rgba(42, 46, 57, 0.3)' },
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(197, 203, 206, 0.8)',
+      },
+      timeScale: {
+        borderColor: 'rgba(197, 203, 206, 0.8)',
+        timeVisible: true,
+      },
+    });
+
+    candlestickSeries = chart.addCandlestickSeries({
+      upColor: '#00e676',
+      downColor: '#ff1744',
+      borderDownColor: '#ff1744',
+      borderUpColor: '#00e676',
+      wickDownColor: '#ff1744',
+      wickUpColor: '#00e676',
+    });
+
+    volumeSeries = chart.addHistogramSeries({
+      color: '#26a69a',
+      priceFormat: {
+        type: 'volume',
+      },
+      priceScaleId: '',
+    });
+
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.8,
+        bottom: 0,
+      },
+    });
+  }
+
+  function generateMockData(numBars = 100) {
+    const data = [];
+    let price = 60000;
+    let time = Math.floor(Date.now() / 1000) - numBars * 3600;
+    
+    for (let i = 0; i < numBars; i++) {
+      const change = (Math.random() - 0.48) * 400;
+      const open = price;
+      const close = price + change;
+      const high = Math.max(open, close) + Math.random() * 150;
+      const low = Math.min(open, close) - Math.random() * 150;
+      const volume = Math.floor(Math.random() * 800) + 100;
+      
+      data.push({
+        time: time + i * 3600,
+        open: parseFloat(open.toFixed(2)),
+        high: parseFloat(high.toFixed(2)),
+        low: parseFloat(low.toFixed(2)),
+        close: parseFloat(close.toFixed(2)),
+        volume: parseFloat(volume.toFixed(2))
+      });
+      price = close;
+    }
+    return data;
+  }
+
+  async function getSandboxDataset() {
+    const datasetSelect = document.getElementById("sandbox-dataset-select");
+    if (!datasetSelect) return generateMockData();
+
+    if (datasetSelect.value === "cached_tv") {
+      try {
+        const res = await fetch("/api/cache/bars?limit=300");
+        const result = await res.json();
+        if (result.success && result.bars && result.bars.length > 0) {
+          return result.bars;
+        } else {
+          sandboxLogBox.innerText += "\n[Warning] Database has no cached bars. Falling back to BTC sample dataset.\n";
+          return generateMockData(300);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cache bars:", err);
+        return generateMockData(300);
+      }
+    } else {
+      return generateMockData(150);
+    }
+  }
+
+  const sandboxRunBtn = document.getElementById("sandbox-run-btn");
+  const sandboxCompileBtn = document.getElementById("sandbox-compile-btn");
+  const sandboxCodeEditor = document.getElementById("sandbox-code-editor");
+  const sandboxLogBox = document.getElementById("sandbox-log-box");
+  const sandboxStatusBadge = document.getElementById("sandbox-status-badge");
+  const sandboxOutputTitle = document.getElementById("sandbox-output-title");
+
+  if (sandboxCodeEditor && !sandboxCodeEditor.value) {
+    sandboxCodeEditor.value = `//@version=5
+indicator("EMA & SMA Cross", overlay=true)
+fastLength = input(9, "Fast Length")
+slowLength = input(21, "Slow Length")
+
+fastEMA = ta.ema(close, fastLength)
+slowSMA = ta.sma(close, slowLength)
+
+plot(fastEMA, "Fast EMA", color=color.green)
+plot(slowSMA, "Slow SMA", color=color.red)
+`;
+  }
+
+  if (sandboxRunBtn) {
+    sandboxRunBtn.addEventListener("click", async () => {
+      const code = sandboxCodeEditor.value.trim();
+      if (!code) {
+        alert("Please enter some Pine Script code first.");
+        return;
+      }
+
+      sandboxRunBtn.disabled = true;
+      sandboxStatusBadge.innerText = "Running...";
+      sandboxStatusBadge.className = "console-badge info";
+      sandboxLogBox.innerText = "Initializing Sandbox Engine...\n";
+      sandboxOutputTitle.innerText = "Execution Logs";
+
+      try {
+        const dataset = await getSandboxDataset();
+        initSandboxChart();
+
+        candlestickSeries.setData(dataset.map(b => ({
+          time: b.time,
+          open: b.open,
+          high: b.high,
+          low: b.low,
+          close: b.close
+        })));
+
+        volumeSeries.setData(dataset.map(b => ({
+          time: b.time,
+          value: b.volume,
+          color: b.close >= b.open ? 'rgba(0, 230, 118, 0.4)' : 'rgba(255, 23, 68, 0.4)'
+        })));
+
+        const isStrategy = /\bstrategy\s*\(/i.test(code);
+
+        if (isStrategy) {
+          sandboxLogBox.innerText += "Detected Strategy Script. Spawning PineForge strategy simulation via Docker...\n";
+          
+          const res = await fetch("/api/backtest/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code,
+              ohlcv: dataset
+            })
+          });
+
+          const result = await res.json();
+          if (result.success && result.report) {
+            const report = result.report;
+            sandboxStatusBadge.innerText = "Success";
+            sandboxStatusBadge.className = "console-badge success";
+            sandboxOutputTitle.innerText = "Strategy Backtest Performance Report";
+            
+            let logMsg = `=== BACKTEST SUCCESS ===\n`;
+            logMsg += `Total Trades executed: ${report.total_trades || report.trades?.length || 0}\n`;
+            logMsg += `Net Profit: $${report.net_profit?.toFixed(2) || 0.00}\n`;
+            if (report.metrics?.equity) {
+              const eq = report.metrics.equity;
+              logMsg += `Max Drawdown: $${eq.max_drawdown?.toFixed(2)} (${eq.max_drawdown_pct?.toFixed(2)}%)\n`;
+              logMsg += `Sharpe Ratio: ${eq.sharpe_tv?.toFixed(2) || 'N/A'}\n`;
+            }
+            if (report.metrics?.all) {
+              const all = report.metrics.all;
+              logMsg += `Win Rate: ${all.percent_profitable?.toFixed(1)}%\n`;
+              logMsg += `Profit Factor: ${all.profit_factor?.toFixed(2)}\n`;
+              logMsg += `Average Win: $${all.avg_win?.toFixed(2)} vs Average Loss: $${all.avg_loss?.toFixed(2)}\n`;
+            }
+            
+            if (report.trades && report.trades.length > 0) {
+              logMsg += `\n--- Trade History ---\n`;
+              report.trades.forEach((t, i) => {
+                const side = t.is_long ? "BUY" : "SELL";
+                const entryT = new Date(t.entry_time * 1000).toLocaleString();
+                const exitT = new Date(t.exit_time * 1000).toLocaleString();
+                logMsg += `[Trade #${i+1}] ${side} | Entry: $${t.entry_price.toFixed(2)} (${entryT}) -> Exit: $${t.exit_price.toFixed(2)} (${exitT}) | P&L: $${t.pnl.toFixed(2)} (${t.pnl_pct.toFixed(2)}%)\n`;
+              });
+            } else {
+              logMsg += `\nNo trades executed during backtest.\n`;
+            }
+            sandboxLogBox.innerText = logMsg;
+
+            if (report.trades && report.trades.length > 0) {
+              const markers = [];
+              report.trades.forEach(t => {
+                markers.push({
+                  time: t.entry_time,
+                  position: t.is_long ? 'belowBar' : 'aboveBar',
+                  color: t.is_long ? '#00e676' : '#ff1744',
+                  shape: t.is_long ? 'arrowUp' : 'arrowDown',
+                  text: t.is_long ? 'Buy' : 'Sell',
+                });
+                markers.push({
+                  time: t.exit_time,
+                  position: t.is_long ? 'aboveBar' : 'belowBar',
+                  color: t.is_long ? '#ff1744' : '#00e676',
+                  shape: t.is_long ? 'arrowDown' : 'arrowUp',
+                  text: 'Exit',
+                });
+              });
+              
+              markers.sort((a, b) => a.time - b.time);
+              candlestickSeries.setMarkers(markers);
+            }
+
+          } else {
+            sandboxStatusBadge.innerText = "Error";
+            sandboxStatusBadge.className = "console-badge error";
+            sandboxLogBox.innerText += `\nError running backtest:\n${result.error || "Unknown error occurred."}`;
+          }
+
+        } else {
+          sandboxLogBox.innerText += "Detected Study/Indicator Script. Running PineTS compilation...\n";
+
+          const res = await fetch("/api/indicator/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code,
+              ohlcv: dataset
+            })
+          });
+
+          const result = await res.json();
+          if (result.success) {
+            sandboxStatusBadge.innerText = "Success";
+            sandboxStatusBadge.className = "console-badge success";
+            
+            let logMsg = `=== INDICATOR COMPUTED SUCCESSFULLY ===\n`;
+            const plotKeys = Object.keys(result.plots || {});
+            
+            if (plotKeys.length > 0) {
+              logMsg += `Rendered Plots: ${plotKeys.join(", ")}\n\n`;
+              
+              plotKeys.forEach((key, i) => {
+                const plot = result.plots[key];
+                const color = plot.color || `hsl(${(i * 120) % 360}, 100%, 60%)`;
+                
+                const lineSeries = chart.addLineSeries({
+                  color,
+                  lineWidth: 2,
+                  title: plot.title || key,
+                });
+                
+                const lineData = plot.data
+                  .filter(d => d.value !== null)
+                  .map(d => ({
+                    time: d.time,
+                    value: d.value
+                  }));
+                
+                lineSeries.setData(lineData);
+                lineSeriesMap.set(key, lineSeries);
+                
+                const lastVal = lineData[lineData.length - 1];
+                logMsg += `[Plot: ${plot.title || key}] Last Value: ${lastVal ? lastVal.value.toFixed(2) : "N/A"}\n`;
+              });
+            } else {
+              logMsg += `Warning: Compiled script contains no plot() outputs.\n`;
+            }
+
+            if (result.transpiledJS) {
+              logMsg += `\n--- Transpiled JS Code Snippet (from Opus-Aether-AI/pine-transpiler) ---\n`;
+              logMsg += result.transpiledJS.substring(0, 1500) + "\n...\n[Truncated - see full file]";
+            }
+            
+            sandboxLogBox.innerText = logMsg;
+
+          } else {
+            sandboxStatusBadge.innerText = "Error";
+            sandboxStatusBadge.className = "console-badge error";
+            sandboxLogBox.innerText += `\nCompilation Error:\n${result.error || "Unknown compilation error."}`;
+          }
+        }
+
+      } catch (err) {
+        sandboxStatusBadge.innerText = "Error";
+        sandboxStatusBadge.className = "console-badge error";
+        sandboxLogBox.innerText += `\nFailed to run execution engine:\n${err.message || String(err)}`;
+      } finally {
+        sandboxRunBtn.disabled = false;
+      }
+    });
+  }
+
+  if (sandboxCompileBtn) {
+    sandboxCompileBtn.addEventListener("click", async () => {
+      const code = sandboxCodeEditor.value.trim();
+      if (!code) {
+        alert("Please enter some Pine Script code first.");
+        return;
+      }
+
+      sandboxCompileBtn.disabled = true;
+      sandboxStatusBadge.innerText = "Compiling...";
+      sandboxStatusBadge.className = "console-badge info";
+      sandboxLogBox.innerText = "Sending code to C++ Transpiler (PineForge)...\n";
+      sandboxOutputTitle.innerText = "C++ Compilation Output";
+
+      try {
+        const res = await fetch("/api/transpile/strategy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code })
+        });
+
+        const result = await res.json();
+        if (result.success && result.cppCode) {
+          sandboxStatusBadge.innerText = "Success";
+          sandboxStatusBadge.className = "console-badge success";
+          sandboxLogBox.innerText = `=== C++ CODE TRANSLATED SUCCESSFULLY ===\n\n${result.cppCode.substring(0, 2000)}\n...\n[Truncated C++ Output]`;
+        } else {
+          sandboxStatusBadge.innerText = "Error";
+          sandboxStatusBadge.className = "console-badge error";
+          sandboxLogBox.innerText += `\nTranspilation Failed:\n${result.error || "Failed to compile Strategy to C++."}`;
+        }
+      } catch (err) {
+        sandboxStatusBadge.innerText = "Error";
+        sandboxStatusBadge.className = "console-badge error";
+        sandboxLogBox.innerText += `\nCompilation Request Failed:\n${err.message || String(err)}`;
+      } finally {
+        sandboxCompileBtn.disabled = false;
+      }
+    });
+  }
+
+  function loadSandboxTab() {
+    console.log("[Sandbox] Tab loaded.");
+    const noDataDiv = document.getElementById("chart-no-data");
+    if (noDataDiv) noDataDiv.style.display = "flex";
   }
 
 });

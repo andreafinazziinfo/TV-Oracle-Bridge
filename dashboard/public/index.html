@@ -11,7 +11,9 @@
   <!-- Lucide Icons (CSS Version) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css">
   <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
+
 <body>
 
   <!-- Top Decorative Neon Bar -->
@@ -53,10 +55,15 @@
           <i class="lucide-download-cloud"></i>
           <span>Script Downloader</span>
         </a>
+        <a href="#" class="nav-item" data-tab="sandbox-tab">
+          <i class="lucide-line-chart"></i>
+          <span>Local Sandbox</span>
+        </a>
         <a href="#" class="nav-item" data-tab="logs-tab">
           <i class="lucide-terminal"></i>
           <span>System Logs</span>
         </a>
+
       </nav>
 
       <div class="sidebar-footer">
@@ -535,8 +542,65 @@
         </div>
       </section>
 
+      <!-- TAB 7: LOCAL SANDBOX -->
+      <section id="sandbox-tab" class="tab-pane">
+        <div class="layout-grid" style="grid-template-columns: 1fr 1fr; gap: 24px;">
+          <!-- Editor Panel -->
+          <div class="panel">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h2><i class="lucide-code-2"></i> Pine Script Editor</h2>
+                <p class="panel-subtitle">Write or paste Pine Script code (Indicators or Strategies).</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button id="sandbox-compile-btn" class="btn btn-secondary"><i class="lucide-cog"></i> Check C++</button>
+                <button id="sandbox-run-btn" class="btn btn-primary"><i class="lucide-play"></i> Run Offline</button>
+              </div>
+            </div>
+            <div class="panel-body" style="display: flex; flex-direction: column; gap: 14px;">
+              <textarea id="sandbox-code-editor" placeholder="//@version=6&#10;indicator(&quot;My Indicator&quot;, overlay=true)&#10;fast = ta.sma(close, 9)&#10;plot(fast, &quot;Fast&quot;)" style="width: 100%; height: 480px; padding: 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none; font-family: monospace; font-size: 0.85rem; line-height: 1.4; resize: vertical;"></textarea>
+              <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 150px;">
+                  <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Sample Dataset:</label>
+                  <select id="sandbox-dataset-select" style="width: 100%; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+                    <option value="generic_btc">Sample BTC/USDT (Generic 100 bars)</option>
+                    <option value="cached_tv">Cached Database Indicators (Last 300 bars)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart & Output Panel -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2><i class="lucide-line-chart"></i> Visual Chart & Trades</h2>
+              <p class="panel-subtitle">Visual rendering of the candles, plot outputs, and strategy executions.</p>
+            </div>
+            <div class="panel-body" style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Lightweight Chart container -->
+              <div id="sandbox-chart-container" style="width: 100%; height: 320px; border-radius: 8px; border: 1px solid var(--border-color); background-color: #0c1015; overflow: hidden; position: relative;">
+                <div id="chart-no-data" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem;">
+                  Click "Run Offline" to visualize indicator data.
+                </div>
+              </div>
+              
+              <!-- Strategy Report Console / Trades list -->
+              <div class="downloader-console" style="margin-top: 0; flex: 1;">
+                <div class="console-header" style="display: flex; justify-content: space-between;">
+                  <span class="console-title" id="sandbox-output-title">Compilation & Output Logs</span>
+                  <span class="console-badge info" id="sandbox-status-badge">Idle</span>
+                </div>
+                <pre id="sandbox-log-box" class="console-log" style="height: 160px; font-size: 0.8rem; overflow-y: auto; white-space: pre-wrap; font-family: monospace; color: #a5f3fc; line-height: 1.4; max-height: none;">Output logs will appear here...</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- TAB 6: SYSTEM LOGS -->
       <section id="logs-tab" class="tab-pane">
+
         <div class="panel">
           <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
             <div>
