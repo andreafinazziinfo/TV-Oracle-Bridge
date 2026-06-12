@@ -12,6 +12,7 @@ package-lock.json
 *.db-journal
 pine_docs_db.json
 daemon_state.json
+screener_presets.local.json
 
 
 

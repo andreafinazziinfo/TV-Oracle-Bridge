@@ -71,11 +71,15 @@ document.addEventListener("DOMContentLoaded", () => {
       case "docs-tab":
         loadDocs();
         break;
+      case "logs-tab":
+        loadSystemLogs();
+        break;
     }
   }
 
   // Initial load
   loadStatus();
+  loadScreenerPresets();
 
   // ==========================================
   // TAB 1: OVERVIEW & STATUS
@@ -289,6 +293,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const lightboxImg = document.getElementById("lightbox-img");
   const lightboxCaption = document.getElementById("lightbox-caption");
   const lightboxClose = document.querySelector(".lightbox-close");
+  const patternFilter = document.getElementById("screenshot-pattern-filter");
+
+  let allScreenshots = [];
+
+  if (patternFilter) {
+    patternFilter.addEventListener("change", () => {
+      renderScreenshots();
+    });
+  }
 
   async function loadScreenshots() {
     try {
@@ -298,42 +311,71 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await res.json();
       if (!result.success) throw new Error(result.error);
 
-      const list = result.screenshots;
-      if (list.length === 0) {
-        gallery.innerHTML = `
-          <div class="inspector-empty" style="grid-column: 1 / -1;">
-            <i class="lucide-image-off"></i>
-            <p>No screenshots captured yet. Run a screenshot macro to save charts.</p>
-          </div>
-        `;
-        return;
-      }
-
-      gallery.innerHTML = "";
-      list.forEach(scr => {
-        const card = document.createElement("div");
-        card.className = "gallery-card";
-        card.innerHTML = `
-          <div class="gallery-thumb-wrapper">
-            <img class="gallery-thumb" src="${escapeHtml(scr.url)}" alt="${escapeHtml(scr.filename)}" loading="lazy">
-            <div class="gallery-overlay">
-              <div class="gallery-info">
-                <span class="gallery-title">${escapeHtml(scr.filename)}</span>
-                <span class="gallery-date">${new Date(scr.createdAt).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        `;
-
-        card.addEventListener("click", () => {
-          openLightbox(scr.url, `${scr.filename} (${new Date(scr.createdAt).toLocaleString()})`);
-        });
-
-        gallery.appendChild(card);
-      });
+      allScreenshots = result.screenshots;
+      renderScreenshots();
     } catch (err) {
       gallery.innerHTML = `<p class="loading-placeholder text-red">Error loading screenshots: ${escapeHtml(err.message)}</p>`;
     }
+  }
+
+  function renderScreenshots() {
+    if (!gallery) return;
+    
+    const selectedPattern = patternFilter ? patternFilter.value : "all";
+    
+    // Filter
+    const filtered = allScreenshots.filter(scr => {
+      if (selectedPattern === "all") return true;
+      return scr.patterns && scr.patterns.includes(selectedPattern);
+    });
+    
+    if (filtered.length === 0) {
+      gallery.innerHTML = `
+        <div class="inspector-empty" style="grid-column: 1 / -1;">
+          <i class="lucide-image-off"></i>
+          <p>No screenshots matching pattern "${escapeHtml(selectedPattern)}" found.</p>
+        </div>
+      `;
+      return;
+    }
+
+    gallery.innerHTML = "";
+    filtered.forEach(scr => {
+      const card = document.createElement("div");
+      card.className = "gallery-card";
+      
+      let patternsHtml = "";
+      if (scr.patterns && scr.patterns.length > 0) {
+        patternsHtml = `<div class="patterns-badges" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">`;
+        scr.patterns.forEach(p => {
+          patternsHtml += `<span class="badge" style="font-size: 0.65rem; padding: 2px 6px; background-color: rgba(0, 242, 254, 0.2); color: var(--neon-cyan); border: 1px solid var(--neon-cyan);">${escapeHtml(p)}</span>`;
+        });
+        patternsHtml += `</div>`;
+      }
+      
+      card.innerHTML = `
+        <div class="gallery-thumb-wrapper">
+          <img class="gallery-thumb" src="${escapeHtml(scr.url)}" alt="${escapeHtml(scr.filename)}" loading="lazy">
+          <div class="gallery-overlay">
+            <div class="gallery-info">
+              <span class="gallery-title">${escapeHtml(scr.filename)}</span>
+              <span class="gallery-date">${new Date(scr.createdAt).toLocaleString()}</span>
+              ${patternsHtml}
+            </div>
+          </div>
+        </div>
+      `;
+
+      card.addEventListener("click", () => {
+        let caption = `${scr.filename} (${new Date(scr.createdAt).toLocaleString()})`;
+        if (scr.patterns && scr.patterns.length > 0) {
+          caption += ` - Patterns: ${scr.patterns.join(", ")}`;
+        }
+        openLightbox(scr.url, caption);
+      });
+
+      gallery.appendChild(card);
+    });
   }
 
   // Lightbox Modal Functions
@@ -900,6 +942,244 @@ ${result.error}`;
       } finally {
         screenerPreviewLoading.classList.add("hidden");
         runScreenerPreviewBtn.disabled = false;
+      }
+    });
+  }
+
+  // ==========================================
+  // CUSTOM SCREENER PRESETS
+  // ==========================================
+  const presetForm = document.getElementById("preset-form");
+  const presetKeyInput = document.getElementById("preset-key-input");
+  const presetTitleInput = document.getElementById("preset-title-input");
+  const presetFieldsInput = document.getElementById("preset-fields-input");
+  const presetFiltersInput = document.getElementById("preset-filters-input");
+  const presetSortByInput = document.getElementById("preset-sortby-input");
+  const presetSortOrderSelect = document.getElementById("preset-sortorder-select");
+  const customPresetsListBody = document.getElementById("custom-presets-list-body");
+
+  let loadedPresets = {};
+
+  async function loadScreenerPresets() {
+    try {
+      const res = await fetch("/api/screener/presets");
+      const result = await res.json();
+      if (result.success) {
+        loadedPresets = result.presets;
+        renderScreenerPresets();
+        updateScreenerDropdown();
+      }
+    } catch (err) {
+      console.error("Failed to load screener presets:", err);
+    }
+  }
+
+  function renderScreenerPresets() {
+    if (!customPresetsListBody) return;
+    customPresetsListBody.innerHTML = "";
+    
+    const entries = Object.entries(loadedPresets);
+    if (entries.length === 0) {
+      customPresetsListBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No custom presets saved.</td></tr>`;
+      return;
+    }
+    
+    entries.forEach(([key, p]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <strong>${escapeHtml(p.title)}</strong><br>
+          <span style="font-size: 0.75rem; color: var(--text-dark);">Key: ${escapeHtml(key)}</span>
+        </td>
+        <td>
+          <code>${escapeHtml(p.sort_by)}</code> (${escapeHtml(p.sort_order)})
+        </td>
+        <td>
+          <span class="badge" style="background-color: rgba(0, 242, 254, 0.1); color: var(--neon-cyan);">${p.fields ? p.fields.length : 0} fields</span>
+          <span class="badge" style="background-color: rgba(255, 170, 0, 0.1); color: var(--neon-amber);">${p.filters ? p.filters.length : 0} filters</span>
+        </td>
+        <td style="text-align: right;">
+          <button class="btn btn-secondary delete-preset-btn" data-key="${escapeHtml(key)}" style="padding: 4px 8px; font-size: 0.75rem; border-color: var(--neon-red); color: var(--neon-red);">
+            <i class="lucide-trash-2"></i> Delete
+          </button>
+        </td>
+      `;
+      customPresetsListBody.appendChild(tr);
+    });
+    
+    // Bind delete buttons
+    document.querySelectorAll(".delete-preset-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const key = btn.getAttribute("data-key");
+        if (confirm(`Are you sure you want to delete the preset '${key}'?`)) {
+          try {
+            const res = await fetch(`/api/screener/presets/${key}`, { method: "DELETE" });
+            const result = await res.json();
+            if (result.success) {
+              loadScreenerPresets();
+            } else {
+              alert("Error deleting preset: " + result.error);
+            }
+          } catch (err) {
+            alert("Network error: " + err.message);
+          }
+        }
+      });
+    });
+  }
+
+  function updateScreenerDropdown() {
+    if (!screenerPresetSelect) return;
+    
+    // Remember currently selected option
+    const currentVal = screenerPresetSelect.value;
+    
+    // Reset dropdown to standard choices
+    screenerPresetSelect.innerHTML = `
+      <option value="top_volume">Top Volume (Default)</option>
+      <option value="top_gainers">Top Gainers</option>
+      <option value="oversold">Oversold (RSI &lt; 30)</option>
+      <option value="overbought">Overbought (RSI &gt; 70)</option>
+      <option value="momentum_breakout">Momentum Breakout</option>
+      <option value="trend_following">Trend Following</option>
+      <option value="golden_cross">Golden Cross</option>
+      <option value="death_cross">Death Cross</option>
+      <option value="mean_reversion">Mean Reversion</option>
+      <option value="stoch_oversold">Stochastic Oversold</option>
+      <option value="whale_accumulation">Whale Accumulation</option>
+      <option value="low_volatility_squeeze">Low Volatility Squeeze</option>
+      <option value="cycle_reversal_long">Cycle Reversal Long</option>
+      <option value="cycle_reversal_short">Cycle Reversal Short</option>
+      <option value="divergence_scan">Divergence Scan</option>
+    `;
+    
+    // Append custom presets
+    const customEntries = Object.entries(loadedPresets);
+    if (customEntries.length > 0) {
+      const group = document.createElement("optgroup");
+      group.label = "Custom Presets";
+      customEntries.forEach(([key, p]) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.innerText = p.title;
+        group.appendChild(opt);
+      });
+      screenerPresetSelect.appendChild(group);
+    }
+    
+    // Restore selection if it still exists
+    screenerPresetSelect.value = currentVal;
+    if (!screenerPresetSelect.value && screenerPresetSelect.options.length > 0) {
+      screenerPresetSelect.selectedIndex = 0;
+    }
+  }
+
+  if (presetForm) {
+    presetForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const key = presetKeyInput.value.trim();
+      const title = presetTitleInput.value.trim();
+      let fields, filters;
+      
+      try {
+        fields = JSON.parse(presetFieldsInput.value.trim());
+        if (!Array.isArray(fields)) throw new Error("Fields must be a JSON array.");
+      } catch (err) {
+        alert("Invalid Fields JSON: " + err.message);
+        return;
+      }
+      
+      try {
+        const filtersStr = presetFiltersInput.value.trim() || "[]";
+        filters = JSON.parse(filtersStr);
+        if (!Array.isArray(filters)) throw new Error("Filters must be a JSON array.");
+      } catch (err) {
+        alert("Invalid Filters JSON: " + err.message);
+        return;
+      }
+      
+      const sort_by = presetSortByInput.value.trim();
+      const sort_order = presetSortOrderSelect.value;
+      
+      try {
+        const res = await fetch("/api/screener/presets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key,
+            preset: { title, fields, filters, sort_by, sort_order }
+          })
+        });
+        const result = await res.json();
+        if (result.success) {
+          presetKeyInput.value = "";
+          presetTitleInput.value = "";
+          presetFieldsInput.value = "";
+          presetFiltersInput.value = "";
+          loadScreenerPresets();
+        } else {
+          alert("Error saving preset: " + result.error);
+        }
+      } catch (err) {
+        alert("Network error: " + err.message);
+      }
+    });
+  }
+
+  // ==========================================
+  // SYSTEM LOGS VIEW
+  // ==========================================
+  const systemLogsBox = document.getElementById("system-logs-box");
+  const logsAutoRefresh = document.getElementById("logs-auto-refresh");
+  const logsCopyBtn = document.getElementById("logs-copy-btn");
+  const logsClearBtn = document.getElementById("logs-clear-btn");
+
+  async function loadSystemLogs() {
+    try {
+      const res = await fetch("/api/logs");
+      const result = await res.json();
+      if (result.success && systemLogsBox) {
+        if (result.logs.length > 0) {
+          systemLogsBox.innerText = result.logs.join("\n");
+        } else {
+          systemLogsBox.innerText = "No system logs available.";
+        }
+        // Auto scroll to bottom
+        systemLogsBox.scrollTop = systemLogsBox.scrollHeight;
+      }
+    } catch (err) {
+      console.error("Failed to load system logs:", err);
+    }
+  }
+
+  // Set up logs tab interval
+  setInterval(() => {
+    if (activeTabId === "logs-tab" && logsAutoRefresh && logsAutoRefresh.checked && document.visibilityState === 'visible') {
+      loadSystemLogs();
+    }
+  }, 2000);
+
+  if (logsCopyBtn) {
+    logsCopyBtn.addEventListener("click", () => {
+      if (systemLogsBox) {
+        navigator.clipboard.writeText(systemLogsBox.innerText)
+          .then(() => {
+            const originalText = logsCopyBtn.innerHTML;
+            logsCopyBtn.innerHTML = "<i class='lucide-check'></i> Copied!";
+            setTimeout(() => { logsCopyBtn.innerHTML = originalText; }, 2000);
+          })
+          .catch(err => {
+            alert("Failed to copy: " + err.message);
+          });
+      }
+    });
+  }
+
+  if (logsClearBtn) {
+    logsClearBtn.addEventListener("click", () => {
+      if (systemLogsBox) {
+        systemLogsBox.innerText = "Logs cleared by user.";
       }
     });
   }

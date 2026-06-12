@@ -119,6 +119,13 @@ The Python screener includes a query builder (`screener_core.py`) mapped to 23 h
 * **Consensus & Performance**: `strong_buy_consensus` (Recommend.All > 0.5), `strong_sell_consensus`, `weekly_performers`, `monthly_losers`.
 * **CycleLab-Optimized Reversals**: `cycle_reversal_long`, `cycle_reversal_short`, and `divergence_scan`.
 
+### 5. Premium Dashboard Console Extensions
+The technical dashboard includes 4 advanced console extensions to improve operations and observability:
+* **Custom Screener Presets Manager**: Add, update, or remove technical scanning layouts directly from the web console. Custom configurations are persisted in `screener_presets.local.json` and automatically loaded in the Python screener script and overview scan dropdown.
+* **Automated Session Expiry Alerts**: A background agent runs every 6 hours to check if the TradingView cookie session has expired. If invalid, it dispatches an alert via the Discord or Telegram webhook notify subsystems. The alert flag resets automatically upon cookie renewal.
+* **Screenshot Pattern Detections & Filtering**: Captured annotated chart screenshots automatically output a `.json` sidecar metadata file with pattern detections. The gallery tab integrates a dropdown selector to filter screenshot thumbnails by detected pattern (Doji, Hammer, Engulfing).
+* **Consolidated Live System Logs Console**: Consolidates stdout and daemon outputs in an auto-scrolling, terminal-like console window on the dashboard for real-time diagnostics, with quick copy-to-clipboard functionality.
+
 ---
 
 ## ↳ Step-by-Step Setup

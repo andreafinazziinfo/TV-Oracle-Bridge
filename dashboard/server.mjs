@@ -9,6 +9,27 @@ const execFileAsync = promisify(execFile);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Override console.log / console.error to capture in-memory logs
+const serverLogs = [];
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  serverLogs.push(`[${new Date().toLocaleTimeString()}] [INFO] ${msg}`);
+  if (serverLogs.length > 300) serverLogs.shift();
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  serverLogs.push(`[${new Date().toLocaleTimeString()}] [ERROR] ${msg}`);
+  if (serverLogs.length > 300) serverLogs.shift();
+};
+
+let hasDispatchedAlert = false;
+
 // Resolve paths
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
 // On Windows, pathname might have a leading slash like /C:/path, we need to sanitize it
@@ -18,6 +39,7 @@ const screenshotsDir = path.join(outDir, "screenshots");
 const dbPath = path.join(outDir, "tv_oracle_cache.db");
 const docsDbPath = path.join(rootDir, "pine_docs_db.json");
 const localCfgPath = path.join(rootDir, "indicators.local.json");
+const localPresetsPath = path.join(rootDir, "screener_presets.local.json");
 
 // Middleware
 app.use(express.json());
@@ -65,6 +87,79 @@ app.get("/api/health", (req, res) => {
     timestamp: new Date().toISOString(),
     node: process.version
   });
+});
+
+// GET /api/screener/presets - Load custom presets from disk
+app.get("/api/screener/presets", async (req, res) => {
+  try {
+    if (!fs.existsSync(localPresetsPath)) {
+      return res.json({ success: true, presets: {} });
+    }
+    const content = await fs.promises.readFile(localPresetsPath, "utf8");
+    res.json({ success: true, presets: JSON.parse(content) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/screener/presets - Create/Save a custom preset
+app.post("/api/screener/presets", async (req, res) => {
+  try {
+    const { key, preset } = req.body;
+    if (!key || /[^a-zA-Z0-9_\-]/.test(key)) {
+      return res.status(400).json({ success: false, error: "Invalid preset key (only alphanumeric, _ and - allowed)." });
+    }
+    if (!preset || typeof preset !== "object") {
+      return res.status(400).json({ success: false, error: "Missing or invalid preset definition." });
+    }
+    
+    let presets = {};
+    if (fs.existsSync(localPresetsPath)) {
+      const content = await fs.promises.readFile(localPresetsPath, "utf8");
+      presets = JSON.parse(content);
+    }
+    
+    presets[key.toLowerCase()] = {
+      title: preset.title || key,
+      fields: Array.isArray(preset.fields) ? preset.fields : ["name", "close", "change", "volume"],
+      filters: Array.isArray(preset.filters) ? preset.filters : [],
+      sort_by: preset.sort_by || "volume",
+      sort_order: preset.sort_order || "desc"
+    };
+    
+    await fs.promises.writeFile(localPresetsPath, JSON.stringify(presets, null, 2), "utf8");
+    res.json({ success: true, message: "Preset saved successfully." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/screener/presets/:key - Delete a custom preset
+app.delete("/api/screener/presets/:key", async (req, res) => {
+  try {
+    const key = req.params.key;
+    if (!key || /[^a-zA-Z0-9_\-]/.test(key)) {
+      return res.status(400).json({ success: false, error: "Invalid preset key." });
+    }
+    
+    if (!fs.existsSync(localPresetsPath)) {
+      return res.status(404).json({ success: false, error: "No custom presets file found." });
+    }
+    
+    const content = await fs.promises.readFile(localPresetsPath, "utf8");
+    const presets = JSON.parse(content);
+    const key_lower = key.toLowerCase();
+    
+    if (!presets[key_lower]) {
+      return res.status(404).json({ success: false, error: `Preset '${key}' not found.` });
+    }
+    
+    delete presets[key_lower];
+    await fs.promises.writeFile(localPresetsPath, JSON.stringify(presets, null, 2), "utf8");
+    res.json({ success: true, message: `Preset '${key}' deleted successfully.` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // GET /api/session/validate - Validate TradingView session cookie validity
@@ -127,6 +222,7 @@ app.get("/api/session/validate", async (req, res) => {
       colorClass = "yellow";
     }
     
+    hasDispatchedAlert = false; // Reset session alert flag on success
     res.json({
       success: true,
       valid: true,
@@ -272,16 +368,41 @@ app.get("/api/screenshots", (req, res) => {
       .map(f => {
         const filePath = path.join(screenshotsDir, f);
         const stat = fs.statSync(filePath);
+        
+        let patterns = [];
+        const jsonPath = filePath.substring(0, filePath.lastIndexOf('.')) + ".json";
+        if (fs.existsSync(jsonPath)) {
+          try {
+            const jsonContent = fs.readFileSync(jsonPath, "utf8");
+            const sidecar = JSON.parse(jsonContent);
+            patterns = sidecar.patterns || [];
+          } catch (e) {
+            // Ignore malformed JSON sidecars
+          }
+        }
+
         return {
           filename: f,
           url: `/screenshots/${f}`,
           sizeBytes: stat.size,
-          createdAt: stat.birthtime || stat.mtime
+          createdAt: stat.birthtime || stat.mtime,
+          patterns
         };
       })
       .sort((a, b) => b.createdAt - a.createdAt); // Newest first
 
     res.json({ success: true, screenshots });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/logs - Retrieve last 150 lines of consolidation server and daemon logs
+app.get("/api/logs", (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || "150", 10);
+    const logsSlice = serverLogs.slice(-limit);
+    res.json({ success: true, logs: logsSlice });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -567,8 +688,62 @@ if (process.argv[1] && (process.argv[1].endsWith("server.mjs") || process.argv[1
   }
 }
 
+async function triggerExpiryAlert(reason) {
+  if (hasDispatchedAlert) return;
+  console.log(`[Session Expiry Monitor] Session expired: ${reason}. Sending alert...`);
+  try {
+    const msg = `🛑 Warning: TradingView sessionid cookie is EXPIRED/INVALID on TV-Oracle-Bridge. Caching Daemon is paused. Please renew cookies via Dashboard.`;
+    await execFileAsync('python', ['notifier.py', msg], { cwd: rootDir });
+    hasDispatchedAlert = true;
+  } catch (err) {
+    console.error("[Session Expiry Monitor] Failed to send notification:", err.message);
+  }
+}
+
+async function checkSessionValidity() {
+  try {
+    const tvSession = process.env.TV_SESSION;
+    const tvSessionSign = process.env.TV_SESSION_SIGN;
+    
+    if (!tvSession || tvSession === "Not Configured") {
+      await triggerExpiryAlert("No TV_SESSION cookie configured in .env");
+      return;
+    }
+    
+    const signinUrl = "https://www.tradingview.com/accounts/signin/status/";
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Cookie": `sessionid=${tvSession}${tvSessionSign && tvSessionSign !== "Not Configured" ? '; sessionid_sign=' + tvSessionSign : ''}`
+    };
+    
+    const response = await fetch(signinUrl, { headers });
+    if (!response.ok) {
+      await triggerExpiryAlert(`TradingView API returned HTTP status ${response.status}`);
+      return;
+    }
+    
+    const data = await response.json();
+    const username = data.user?.username;
+    if (!username) {
+      await triggerExpiryAlert("Invalid session cookie (unauthorized response from TradingView)");
+      return;
+    }
+    
+    if (hasDispatchedAlert) {
+      console.log("[Session Expiry Monitor] Session is now valid. Resetting alert flag.");
+      hasDispatchedAlert = false;
+    }
+  } catch (err) {
+    console.error("[Session Expiry Monitor] Error checking session status:", err.message);
+  }
+}
+
 // Start listening if run directly
 if (process.argv[1] && (process.argv[1].endsWith("server.mjs") || process.argv[1].endsWith("server.js"))) {
+  // Start session monitoring
+  setTimeout(checkSessionValidity, 10000);
+  setInterval(checkSessionValidity, 6 * 60 * 60 * 1000);
+
   app.listen(PORT, () => {
     console.log(`=======================================================`);
     console.log(`🚀 TV-Oracle-Bridge Dashboard Server running locally`);

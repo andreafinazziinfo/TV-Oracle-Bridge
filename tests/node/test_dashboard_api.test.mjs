@@ -138,4 +138,73 @@ describe("Dashboard API Endpoints", () => {
     assert.strictEqual(res.body.success, false);
     assert.match(res.body.error, /Missing script URL/);
   });
+
+  test("GET /api/screener/presets returns success", async () => {
+    const res = await request(app)
+      .get("/api/screener/presets")
+      .expect(200);
+      
+    assert.strictEqual(res.body.success, true);
+    assert.ok("presets" in res.body);
+  });
+
+  test("POST and DELETE /api/screener/presets creates, validates and deletes presets", async () => {
+    const testKey = "test_preset_node";
+    const testPreset = {
+      title: "Test Preset Node",
+      fields: ["name", "close"],
+      filters: [{"left": "close", "operation": "greater", "right": 100}],
+      sort_by: "close",
+      sort_order: "asc"
+    };
+
+    // 1. Create preset
+    const postRes = await request(app)
+      .post("/api/screener/presets")
+      .send({ key: testKey, preset: testPreset })
+      .expect(200);
+      
+    assert.strictEqual(postRes.body.success, true);
+
+    // 2. Reject invalid key format
+    await request(app)
+      .post("/api/screener/presets")
+      .send({ key: "invalid$key!", preset: testPreset })
+      .expect(400);
+
+    // 3. Retrieve and assert preset was created
+    const getRes = await request(app)
+      .get("/api/screener/presets")
+      .expect(200);
+      
+    assert.strictEqual(getRes.body.success, true);
+    assert.ok(testKey in getRes.body.presets);
+    assert.strictEqual(getRes.body.presets[testKey].title, testPreset.title);
+
+    // 4. Delete the preset
+    const delRes = await request(app)
+      .delete(`/api/screener/presets/${testKey}`)
+      .expect(200);
+      
+    assert.strictEqual(delRes.body.success, true);
+
+    // 5. Delete non-existent preset returns 404
+    await request(app)
+      .delete(`/api/screener/presets/${testKey}`)
+      .expect(404);
+      
+    // 6. Delete invalid key format returns 400
+    await request(app)
+      .delete("/api/screener/presets/invalid$key!")
+      .expect(400);
+  });
+
+  test("GET /api/logs returns consolidation logs list", async () => {
+    const res = await request(app)
+      .get("/api/logs?limit=5")
+      .expect(200);
+      
+    assert.strictEqual(res.body.success, true);
+    assert.ok(Array.isArray(res.body.logs));
+  });
 });

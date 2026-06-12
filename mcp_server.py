@@ -165,6 +165,26 @@ def capture_screenshot(symbol: str = "BINANCE:BTCUSDT", timeframe: str = "60", n
         if not screenshot_path.exists():
             return f"Error: Screenshot task completed but image {screenshot_path} not found. Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
             
+        # Collect detected pattern labels
+        patterns = []
+        if ohlc:
+            patterns = list(set(ann["label"] for ann in annotations)) if annotations else []
+            
+        # Save JSON sidecar
+        try:
+            import datetime
+            json_path = screenshot_path.with_suffix(".json")
+            sidecar_data = {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                "patterns": patterns
+            }
+            with open(json_path, "w", encoding="utf-8") as json_file:
+                json.dump(sidecar_data, json_file, indent=2)
+        except Exception as ex:
+            print(f"[Screenshot Tool] Failed to write sidecar JSON: {ex}")
+
         # Parse and return structured JSON metadata
         stdout_lines = result.stdout.splitlines()
         metadata_str = None

@@ -268,3 +268,26 @@ PRESETS: Dict[str, Dict[str, Any]] = {
         "sort_order": "desc"
     }
 }
+
+# Load local presets if they exist and merge them
+import json
+from pathlib import Path
+
+LOCAL_PRESETS_PATH = Path(__file__).parent / "screener_presets.local.json"
+if LOCAL_PRESETS_PATH.exists():
+    try:
+        with open(LOCAL_PRESETS_PATH, "r", encoding="utf-8") as f:
+            local_data = json.load(f)
+            if isinstance(local_data, dict):
+                for k, v in local_data.items():
+                    key_lower = k.lower()
+                    PRESETS[key_lower] = {
+                        "title": v.get("title", k),
+                        "fields": v.get("fields", ["name", "close", "change", "volume"]),
+                        "filters": v.get("filters", []),
+                        "sort_by": v.get("sort_by", "volume"),
+                        "sort_order": v.get("sort_order", "desc")
+                    }
+    except Exception as e:
+        print(f"[Warning] Failed to load local presets: {e}")
+

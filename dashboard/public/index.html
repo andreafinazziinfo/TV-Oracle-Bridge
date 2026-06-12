@@ -53,6 +53,10 @@
           <i class="lucide-download-cloud"></i>
           <span>Script Downloader</span>
         </a>
+        <a href="#" class="nav-item" data-tab="logs-tab">
+          <i class="lucide-terminal"></i>
+          <span>System Logs</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -256,6 +260,70 @@
             </div>
           </div>
         </div>
+
+        <!-- Screener Presets Manager Panel -->
+        <div class="panel" style="grid-column: span 2; margin-top: 30px;">
+          <div class="panel-header">
+            <h2><i class="lucide-sliders-horizontal"></i> Custom Screener Presets Manager</h2>
+            <p class="panel-subtitle">Create, view, and delete custom layouts saved locally as <code>screener_presets.local.json</code>.</p>
+          </div>
+          <div class="panel-body" style="display: flex; gap: 30px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 300px;">
+              <h3><i class="lucide-plus-circle"></i> Create/Update Preset</h3>
+              <form id="preset-form" style="display: flex; flex-direction: column; gap: 14px; margin-top: 15px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="preset-key-input">Preset Key (Alphanumeric/Underscore/Dash)</label>
+                  <input type="text" id="preset-key-input" placeholder="my_rsi_oversold" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="preset-title-input">Display Title</label>
+                  <input type="text" id="preset-title-input" placeholder="My RSI Oversold Scan" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="preset-fields-input">Columns / Fields (JSON string array)</label>
+                  <textarea id="preset-fields-input" placeholder='["name", "close", "change", "RSI"]' required style="width: 100%; height: 60px; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none; font-family: monospace;"></textarea>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="preset-filters-input">TradingView Filters (JSON objects array)</label>
+                  <textarea id="preset-filters-input" placeholder='[{"left": "RSI", "operation": "less", "right": 30}]' style="width: 100%; height: 80px; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none; font-family: monospace;"></textarea>
+                </div>
+                <div style="display: flex; gap: 14px;">
+                  <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                    <label for="preset-sortby-input">Sort By</label>
+                    <input type="text" id="preset-sortby-input" placeholder="volume" value="volume" required style="width: 100%; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+                  </div>
+                  <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                    <label for="preset-sortorder-select">Sort Order</label>
+                    <select id="preset-sortorder-select" style="width: 100%; padding: 8px 12px; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none; height: 38px;">
+                      <option value="desc">Descending</option>
+                      <option value="asc">Ascending</option>
+                    </select>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="padding: 10px; margin-top: 10px;"><i class="lucide-save"></i> Save Preset</button>
+              </form>
+            </div>
+            
+            <div style="flex: 1.2; min-width: 350px; display: flex; flex-direction: column;">
+              <h3><i class="lucide-list"></i> Saved Custom Presets</h3>
+              <div class="env-table-wrapper" style="margin-top: 15px; flex-grow: 1;">
+                <table class="env-table">
+                  <thead>
+                    <tr>
+                      <th>Title / Key</th>
+                      <th>Sort</th>
+                      <th>Columns & Filters Count</th>
+                      <th style="text-align: right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="custom-presets-list-body">
+                    <tr><td colspan="4" class="text-center text-muted">No custom presets saved.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- TAB: HEALTH & SESSION -->
@@ -340,9 +408,23 @@
       <!-- TAB 2: SCREENSHOTS GALLERY -->
       <section id="screenshots-tab" class="tab-pane">
         <div class="panel">
-          <div class="panel-header">
-            <h2><i class="lucide-image"></i> Captured Screenshot Logs</h2>
-            <p class="panel-subtitle">Interactive logs with automatic candlestick detections.</p>
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <h2><i class="lucide-image"></i> Captured Screenshot Logs</h2>
+              <p class="panel-subtitle">Interactive logs with automatic candlestick detections.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <label for="screenshot-pattern-filter" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Filter by Pattern:</label>
+              <select id="screenshot-pattern-filter" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); outline: none;">
+                <option value="all">All Detections</option>
+                <option value="Hammer">Hammer</option>
+                <option value="Doji">Doji</option>
+                <option value="Engulfing">Engulfing</option>
+                <option value="Shooting Star">Shooting Star</option>
+                <option value="Morning Star">Morning Star</option>
+                <option value="Evening Star">Evening Star</option>
+              </select>
+            </div>
           </div>
           <div class="panel-body">
             <div class="gallery-grid" id="screenshots-gallery">
@@ -448,6 +530,35 @@
                 <span class="console-badge info" id="console-status-badge">Idle</span>
               </div>
               <pre id="console-log" class="console-log">Ready...</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: SYSTEM LOGS -->
+      <section id="logs-tab" class="tab-pane">
+        <div class="panel">
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <h2><i class="lucide-terminal"></i> Live System Logs</h2>
+              <p class="panel-subtitle">Consolidated view of the background caching daemon and API server logs.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="logs-auto-refresh" checked style="width: 16px; height: 16px; accent-color: var(--neon-cyan);">
+                <label for="logs-auto-refresh" style="font-size: 0.85rem; color: var(--text-muted); cursor: pointer; user-select: none;">Auto-refresh</label>
+              </div>
+              <button id="logs-copy-btn" class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.8rem;">
+                <i class="lucide-copy"></i> Copy Logs
+              </button>
+              <button id="logs-clear-btn" class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.8rem; border-color: var(--neon-red); color: var(--neon-red);">
+                <i class="lucide-trash-2"></i> Clear View
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="downloader-console" style="margin-top: 0;">
+              <pre id="system-logs-box" class="console-log" style="height: 550px; max-height: none; font-size: 0.8rem; color: #a5f3fc; overflow-y: auto;">Connecting to logs stream...</pre>
             </div>
           </div>
         </div>
