@@ -31,6 +31,7 @@
 * 📊 **Structured Data Extraction**: Intercept and extract raw JSON data for Options chains, Market Heatmaps, and Bond Yield Curves (`node remoteControl.mjs extract`).
 * 🔔 **Instant Alert Webhooks**: Receive and log real-time TradingView price or study alerts (`POST /api/alerts`) and forward them instantly to Discord/Telegram.
 * 💻 **Pine AST Compiler Check**: Perform programmatic Pine Script compilation validation via integrated PineTS linter checks.
+* 🧪 **Local Pine Script Sandbox**: Compile, transpile, and run Pine Script indicators (using PineTS) and strategies (using PineForge Docker) offline. Render candlestick charts, volume histograms, custom plot lines, and buy/sell entry/exit markers visually using Lightweight Charts.
 * 🔍 **Market Technical Screening**: Scan global crypto, forex, and stock symbols by technical states (`python screener.py`).
 * 🕯️ **Candlestick Pattern Scanner**: Detect pattern formations (Hammer, Engulfing, Doji) on historical feeds (`python pattern_detector.py`).
 * 🤖 **AI Agent Integration**: Expose all functionalities (including documentation autocomplete, spellchecker, and notifier) via FastMCP server gateway.
@@ -92,8 +93,10 @@ This standalone project integrates multiple components to bridge the gap between
 7. **`pine_docs.py` (Linter & Reference)**: Offline documentation lookup with spelling autocorrect (via `difflib` Gestalt Pattern Matching) and a syntax checker detecting v4-obsolete keywords, missing namespaces (e.g. `rsi` -> `ta.rsi` in v5/v6), and unmatched brackets. It now integrates a programmatic compilation validator.
 8. **`build_pine_docs.mjs` (Sitemap Crawler)**: Playwright crawler that scrapes TradingView's Pine Script v6 sitemap and extracts sitemap parameters for 800+ functions, generating a local sitemap file (`pine_docs_db.json`).
 9. **`pineTranspilerWrapper.mjs` (Safe TS Transpiler)**: Programmatically integrates the `pinets` transpiler library to perform Pine Script compilation validation check, complying with licensing constraints.
-10. **`tv_cache.py` (SQLite Cache & Telemetry)**: Configured in **WAL (Write-Ahead Logging) mode** for database concurrency safety. Maintains data tables for indicator series and runs metadata (`runs` table) and runs an eviction policy (`cleanup_old_bars`) to limit disk space.
-11. **`Dockerfile` & `docker-compose.yml` (Docker Orchestrator)**: Containerizes Node/Python/Playwright for automated background runs, mapping ports `5000` and `8000` while mounting persistent database volumes.
+10. **`transpiler_helper.mjs` (Standalone Indicator Compiler)**: Wraps `@opus-aether-ai/pine-transpiler` to translate Pine Script indicators into standalone, self-contained JavaScript factory strings.
+11. **`scripts/run_strategy_ffi.py` (Python ctypes FFI)**: Python bridge utilizing `ctypes` to run compiled C++ strategy binaries on JSON OHLCV inputs, returning full trade logs and statistics.
+12. **`tv_cache.py` (SQLite Cache & Telemetry)**: Configured in **WAL (Write-Ahead Logging) mode** for database concurrency safety. Maintains data tables for indicator series and runs metadata (`runs` table) and runs an eviction policy (`cleanup_old_bars`) to limit disk space.
+13. **`Dockerfile` & `docker-compose.yml` (Docker Orchestrator)**: Containerizes Node/Python/Playwright for automated background runs, mapping ports `5000` and `8000` while mounting persistent database volumes.
 
 ---
 
@@ -133,6 +136,12 @@ The technical dashboard includes 4 advanced console extensions to improve operat
 * **Automated Session Expiry Alerts**: A background agent runs every 6 hours to check if the TradingView cookie session has expired. If invalid, it dispatches an alert via the Discord or Telegram webhook notify subsystems. The alert flag resets automatically upon cookie renewal.
 * **Screenshot Pattern Detections & Filtering**: Captured annotated chart screenshots automatically output a `.json` sidecar metadata file with pattern detections. The gallery tab integrates a dropdown selector to filter screenshot thumbnails by detected pattern (Doji, Hammer, Engulfing).
 * **Consolidated Live System Logs Console**: Consolidates stdout and daemon outputs in an auto-scrolling, terminal-like console window on the dashboard for real-time diagnostics, with quick copy-to-clipboard functionality.
+
+### 6. Local Sandbox & Offline Execution Engines
+The Web Dashboard includes a fully interactive local sandbox pane to prototype and validate indicator and strategy logic offline:
+* **JS Indicator Evaluation**: Uses `pinets` and `@opus-aether-ai/pine-transpiler` on the server to execute study code directly on loaded historical bars, outputting numerical curves plotted natively via Lightweight Charts.
+* **C++ Strategy Simulations**: Spawns containerized compiler environments running `pineforge-codegen` inside Docker, returning complete performance reports (Sharpe ratios, drawdown curves, win rate splits) and drawing entries/exits directly on the candles.
+* **Interactive Charting Workspace**: Features an integrated code editor (left pane), dataset toggler, status badge console, and a responsive charting canvas (right pane) visualizing price data, histograms, and indicators simultaneously.
 
 ---
 
@@ -267,7 +276,7 @@ npm test
 ```
 This script runs:
 1. **Python tests (`pytest`)**: 24 tests validating screeners, caching database operations, notifier dispatching, pattern classification, and path sanitizers.
-2. **Node.js tests (`node --test`)**: 22 tests validating CLI scripts, Playwright configurations, cookie parsers, and all Express endpoints (utilizing `supertest`).
+2. **Node.js tests (`node --test`)**: 58 tests validating CLI scripts, Playwright configurations, cookie parsers, all Express endpoints (utilizing `supertest`), and the Local Sandbox transpilation/execution logic (82 total tests, ALL PASS).
 
 ---
 ## 🤖 Running the MCP Server
