@@ -66,30 +66,57 @@ graph TD
     E <-->|Injected Cookies| D
     C <-->|Secured WebSockets| D
     D -->|Real-time Plots, Tables & Graphics| C
-    C -->|Sanitized JSON Data| B
-```
-
----
-
-## ✨ Codebase Breakdown (How it Works)
+  ## ✨ Codebase Breakdown (How it Works)
 
 This standalone project integrates multiple components to bridge the gap between TradingView's client-side runtime and your local python/agentic environment:
 
-1. **`fetchIndicator.mjs` (WebSocket Extractor)**: Connects to TradingView's WebSockets to stream computed indicator plots, strategies, tables, and drawing labels into local SQLite/JSON formats.
-2. **`remoteControl.mjs` (Browser Automator)**: Uses Playwright to launch browser sessions (e.g. Brave/Chrome), navigate charts, execute remote commands, download scripts, and capture screenshots.
-3. **`dashboard/` (Local Web Dashboard)**: Express backend (`server.mjs`) and SPA client (`public/`) offering status overviews, image sliders, indicator inspector, autocomplete docs search, script downloader panel, and daemon managers.
-4. **`notifier.py` (Webhook Notifier)**: Native Python module to dispatch text alerts and screenshot file attachments to Discord and Telegram.
-5. **`screener.py` (Market Scanner)**: Scans global tickers for volume spikes, oversold levels, and top gainers using official API scanners.
-6. **`pattern_detector.py` (Candlestick Classifier)**: Offline analyzer evaluating candlestick patterns (Doji, Hammer, Engulfing) on cached database bars.
-7. **`pine_docs.py` (Linter & Autocomplete)**: Offline Pine Script v5/v6 syntax checker featuring typo-correction suggestions via `difflib`.
-8. **`build_pine_docs.mjs` (Sitemap Crawler)**: Playwright sitemap scraper compiling documentation into a rich 800+ function database (`pine_docs_db.json`).
-9. **`pineTranspilerWrapper.mjs` (Safe TS Transpiler)**: Isolates `@luxalgo/pinets` compiler runs to maintain 100% license independence from AGPL-3.0.
-10. **`mcp_server.py` (FastMCP Gateway)**: Exposes all scraper, scanner, and control tools to local AI agents.
-11. **`Dockerfile` & `docker-compose.yml` (Docker Stack)**: Containerizes Node/Python/Playwright for simple multi-platform background deployment.
+1. **`fetchIndicator.mjs` (WebSocket Extractor)**: Connects to TradingView's secure WebSocket feed using `@mathieuc/tradingview`. Streams real-time plot series (`study.periods`) and interactive UI drawing elements (tables, lines, labels, boxes), outputting identical values as the browser runtime.
+2. **`remoteControl.mjs` (Browser Automator & Annotator)**: Harnesses Playwright to automate TradingView charts. Controls chart assets, layouts, and indicators. Features a **Canvas overlay engine** that highlights candlestick patterns by rendering drawing boxes directly onto PNG screenshots without heavy native C++ dependencies.
+3. **`dashboard/` (Local Web Technical Console)**: An Express backend (`server.mjs`) and SPA client (`public/`) running on port `5000`. Features real-time status widgets, cookie expiration countdowns, SQLite stats inspectors, a documentation viewer, an open-source script downloader, and background cache logs.
+4. **`notifier.py` (Webhook Notifier)**: A zero-dependency Python helper that utilizes `urllib` to dispatch rich Markdown embeds and snapshot image attachments to Discord channels and Telegram bot chats.
+5. **`screener.py` / `screener_core.py` / `screener_presets.py` (Advanced Screener)**: Queries TradingView's official scanner endpoints. Features **23 pre-configured technical presets** (Momentum, Mean Reversion, Volume, consensus, etc.) and allows arbitrary JSON-based multi-filter scanner builds.
+6. **`pattern_detector.py` (Candlestick Classifier)**: Evaluates cached historical OHLCV candles to detect patterns (Hammer, Doji, Shooting Star, Bullish/Bearish Engulfing) using a private, unified scanning routine.
+7. **`pine_docs.py` (Linter & Reference)**: Offline documentation lookup with spelling autocorrect (via `difflib` Gestalt Pattern Matching) and a static syntax checker detecting v4-obsolete keywords, missing namespaces (e.g. `rsi` -> `ta.rsi` in v5/v6), and unmatched brackets.
+8. **`build_pine_docs.mjs` (Sitemap Crawler)**: Playwright crawler that scrapes TradingView's Pine Script v6 sitemap and extracts sitemap parameters for 800+ functions, generating a local sitemap file (`pine_docs_db.json`).
+9. **`pineTranspilerWrapper.mjs` (Safe TS Transpiler)**: Spawns the `@luxalgo/pinets` compiler as an isolated Node subprocess via `npx` to keep the codebase clean of AGPL-3.0 copyleft code constraints.
+10. **`tv_cache.py` (SQLite Cache & Telemetry)**: Configured in **WAL (Write-Ahead Logging) mode** for database concurrency safety. Maintains data tables for indicator series and runs metadata (`runs` table) and runs an eviction policy (`cleanup_old_bars`) to limit disk space.
+11. **`Dockerfile` & `docker-compose.yml` (Docker Orchestrator)**: Containerizes Node/Python/Playwright for automated background runs, mapping ports `5000` and `8000` while mounting persistent database volumes.
 
 ---
 
-## 🚀 Step-by-Step Setup
+## ⚙️ Advanced Features & System Internals
+
+### 1. SQLite WAL Cache & Delta Syncing
+To prevent data drift and avoid overloading TradingView's WebSockets, `tv_cache.py` saves historical values to `out/tv_oracle_cache.db`.
+* **WAL Mode**: Enabled by default (`PRAGMA journal_mode = wal`) for concurrent write safety.
+* **Delta Syncing**: Before starting a WebSocket stream, the system checks the database for the newest cached bar timestamp. If present, it requests only a small subset (e.g., last 100 bars) and merges the new data, reducing streaming wait times from **20 seconds to 8 seconds**.
+* **Eviction Policy**: Automatically purges historical records older than a configured limit (`cleanup_old_bars(max_age_days=90)`) to maintain database performance.
+* **Run Telemetry**: Log stats for every fetch (duration, row counts, delta-sync status, errors) are saved in the `runs` table, queryable via the MCP tool `get_run_history`.
+
+### 2. Canvas Chart Annotator
+When screenshots are requested with pattern detection active:
+1. Playwright captures the standard chart PNG layout.
+2. `pattern_detector.py` evaluates the candle database and extracts coordinates.
+3. Playwright loads the screenshot inside a canvas element on a temporary page.
+4. An HTML5 Canvas script draws translucent highlight blocks and colored flags identifying Doji, Hammer, and Engulfing patterns, saving the annotated PNG.
+
+### 3. Session Refresher & Cookie Manager
+When cookies expire, `session_helper.mjs` automates credential refreshes:
+* Spawns a visible browser window (using Brave or Chrome as configured in `.env`).
+* Prompts the user to log in and solve captchas/2FA.
+* Extracts `sessionid` and `sessionid_sign`, performs a validation request to the TradingView status API, and updates `.env` with file permissions set to `0o600` for security.
+
+### 4. Advanced 23-Preset Technical Screener
+The Python screener includes a query builder (`screener_core.py`) mapped to 23 high-performance presets defined in `screener_presets.py`:
+* **Momentum & Trend**: `momentum_breakout`, `trend_following`, `golden_cross`, `death_cross`.
+* **Mean Reversion & Oscillators**: `mean_reversion`, `stoch_oversold`, `stoch_overbought`, `cci_extreme_low`, `cci_extreme_high`.
+* **Volume & Accumulation**: `whale_accumulation` (volume > 3x avg), `high_volatility`, `low_volatility_squeeze`, `unusual_volume`.
+* **Consensus & Performance**: `strong_buy_consensus` (Recommend.All > 0.5), `strong_sell_consensus`, `weekly_performers`, `monthly_losers`.
+* **CycleLab-Optimized Reversals**: `cycle_reversal_long`, `cycle_reversal_short`, and `divergence_scan`.
+
+---
+
+## ↳ Step-by-Step Setup
 
 ### 1. Prerequisites
 Ensure you have the following installed:
@@ -155,7 +182,7 @@ Edit `indicators.local.json` and insert your invite-only or private indicator ID
 ## 🛠️ Usage Guide
 
 ### 1. Fetching Indicator Data
-Extract computed values directly into the `out/` folder:
+Extract computed values directly into the SQLite database and `out/` folder:
 ```bash
 node fetchIndicator.mjs <key> [range] [waitMs]
 ```
@@ -168,14 +195,14 @@ Example:
 node fetchIndicator.mjs completa 5000 20000
 ```
 
-### 2. Capturing Chart Screenshots
+### 2. Capturing Chart Screenshots (with Canvas Overlays)
 Take high-resolution snapshots of your chart layouts:
 ```bash
-node remoteControl.mjs screenshot <symbol> <timeframe> [output_name.png]
+node remoteControl.mjs screenshot <symbol> <timeframe> [output_name.png] [annotations_json]
 ```
 Example:
 ```bash
-node remoteControl.mjs screenshot BINANCE:BTCUSDT 60 btc_chart.png
+node remoteControl.mjs screenshot BINANCE:BTCUSDT 60 btc_chart.png '[{"barIndexFromRight": 2, "color": "rgba(255,0,0,0.15)", "label": "Bearish Engulfing"}]'
 ```
 
 ### 3. Running the Technical Screener
@@ -184,11 +211,11 @@ Scan technical setups across different markets:
 python screener.py <market> <condition> [limit]
 ```
 * **`market`**: `crypto`, `forex`, `america` (stocks).
-* **`condition`**: `top_volume`, `top_gainers`, `oversold` (RSI < 30), `overbought` (RSI > 70).
+* **`condition`**: Any of the 23 presets (e.g., `whale_accumulation`, `cycle_reversal_long`, `oversold`).
 
 Example:
 ```bash
-python screener.py crypto oversold 15
+python screener.py crypto cycle_reversal_long 15
 ```
 
 ### 4. Scanning Candlestick Patterns
@@ -202,24 +229,25 @@ python pattern_detector.py out/completa.json
 ```
 
 ### 5. Running the Local Web Dashboard & Daemon
-Launch the premium web console to inspect indicator caches, view screenshots, look up documentation, download open-source scripts, and manage background caching refresher cycles:
+Launch the web console to inspect caches, screenshots, documentations, and manage background auto-refresher daemon cycles:
 ```bash
 npm run dashboard
-# or: node dashboard/server.mjs
 ```
-Open your browser and navigate to **`http://localhost:5000`** to access:
-* **Overview & Status**: Review SQLite database stats, masked environment variable configuration, and control/monitor the **Background Caching Auto-Refresher Daemon** with live log streaming.
-* **Screenshot Gallery**: A visual drawer featuring a fullscreen lightbox slider for all captured chart layouts.
-* **Indicator Database**: Interactive explorer to inspect raw JSON parameters, inputs, and historical series records.
-* **Pine Script Docs**: Query a comprehensive dictionary of Pine Script v5/v6 functions, complete with parameter descriptions, examples, and syntax.
-* **Script Downloader**: Paste public TradingView script detail URLs to fetch and extract code formatting, saving the result under `out/downloads/`.
+Open **`http://localhost:5000`** to access:
+* **Overview & Status**: System health, masked env variables, and the **Background Caching Auto-Refresher Daemon** panel.
+* **Screenshot Gallery**: High-resolution lightbox viewer for chart layouts.
+* **Indicator Database**: Split-pane raw JSON explorer and data inspector.
+* **Pine Script Docs**: Query tool searching 800+ v5/v6 functions offline.
+* **Script Downloader**: Download and sanitize open-source scripts into `.pine` files.
 
-### 6. Crawling Pine Docs
-To compile or refresh the local offline Pine Script docs database (`pine_docs_db.json`), run the optimized Playwright crawler:
+### 6. Executing Unit Test Suites
+The project includes a robust test framework checking Python modules and Express API endpoints:
 ```bash
-node build_pine_docs.mjs
+npm test
 ```
-This script scans official sitemaps, resolves duplicates, and downloads structured function specifications (syntax, parameters, examples, return values) for 800+ unique identifiers.
+This script runs:
+1. **Python tests (`pytest`)**: 24 tests validating screeners, caching database operations, notifier dispatching, pattern classification, and path sanitizers.
+2. **Node.js tests (`node --test`)**: 17 tests validating CLI scripts, Playwright configurations, cookie parsers, and all Express endpoints (utilizing `supertest`).
 
 ---
 ## 🤖 Running the MCP Server
