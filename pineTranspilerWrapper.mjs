@@ -1,12 +1,11 @@
-// Safe subprocess wrapper for executing PineTS (AGPL-3.0) 
+// Safe programmatic wrapper for executing PineTS (AGPL-3.0) 
 // without including any copyleft code directly within our repository.
-import { spawn } from "node:child_process";
+import { PineTS, Provider } from "pinets";
 import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Transpiles a local Pine Script file to JavaScript using the external PineTS CLI.
- * Runs in an isolated subprocess via 'npx' to comply with licensing constraints.
+ * Transpiles a local Pine Script file to JavaScript using the PineTS library.
  * 
  * @param {string} pineFilePath - Path to the input .pine file.
  * @returns {Promise<string>} - The transpiled JS code output.
@@ -19,34 +18,20 @@ export function transpilePineScript(pineFilePath) {
       return;
     }
 
-    console.log(`[PineTS Wrapper] Launching transpiler for: ${absPath}`);
-
-    const child = process.platform === "win32"
-      ? spawn("cmd.exe", ["/c", "npx", "-y", "@luxalgo/pinets", absPath])
-      : spawn("npx", ["-y", "@luxalgo/pinets", absPath]);
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    child.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Transpiler process exited with code ${code}.\nStderr:\n${stderr}`));
-        return;
-      }
-      resolve(stdout);
-    });
-
-    child.on("error", (err) => {
-      reject(new Error(`Failed to start transpiler subprocess: ${err.message}`));
-    });
+    console.log(`[PineTS Wrapper] Compiling Pine Script: ${absPath}`);
+    try {
+      const codeText = fs.readFileSync(absPath, "utf8");
+      const p = new PineTS(Provider.Binance, "BTCUSDT", "1h", 1);
+      p.run(codeText)
+        .then(() => {
+          resolve(p.transpiledCode ? p.transpiledCode.toString() : "");
+        })
+        .catch((err) => {
+          reject(new Error(err.message));
+        });
+    } catch (err) {
+      reject(new Error(`Failed to compile script: ${err.message}`));
+    }
   });
 }
 

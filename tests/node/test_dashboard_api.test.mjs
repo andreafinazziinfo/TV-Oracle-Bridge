@@ -207,4 +207,55 @@ describe("Dashboard API Endpoints", () => {
     assert.strictEqual(res.body.success, true);
     assert.ok(Array.isArray(res.body.logs));
   });
+
+  test("POST and GET /api/alerts accepts, stores and retrieves alerts", async () => {
+    const payload = { message: "Test Alert", symbol: "BTCUSDT", value: 45000 };
+    
+    // Post alert
+    const postRes = await request(app)
+      .post("/api/alerts")
+      .send(payload)
+      .expect(200);
+      
+    assert.strictEqual(postRes.body.success, true);
+    assert.strictEqual(postRes.body.message, "Alert received and logged.");
+
+    // Retrieve alerts
+    const getRes = await request(app)
+      .get("/api/alerts")
+      .expect(200);
+      
+    assert.strictEqual(getRes.body.success, true);
+    assert.ok(Array.isArray(getRes.body.alerts));
+    
+    const matched = getRes.body.alerts.find(a => a.payload.message === "Test Alert");
+    assert.ok(matched);
+    assert.strictEqual(matched.payload.symbol, "BTCUSDT");
+  });
+
+  test("GET /api/extract/:type input validation and execution", async () => {
+    // 1. Invalid extraction type
+    const resInvalidType = await request(app)
+      .get("/api/extract/invalid_type")
+      .expect(400);
+    assert.strictEqual(resInvalidType.body.success, false);
+    assert.match(resInvalidType.body.error, /Invalid extraction type/);
+
+    // 2. Invalid symbol input
+    const resInvalidSymbol = await request(app)
+      .get("/api/extract/options?symbol=invalid;symbol")
+      .expect(400);
+    assert.strictEqual(resInvalidSymbol.body.success, false);
+    assert.match(resInvalidSymbol.body.error, /Invalid symbol characters/);
+
+    // 3. Valid extraction mock run
+    process.env.NODE_ENV = "test"; // Set test mode to use mocked extraction output
+    const resValid = await request(app)
+      .get("/api/extract/options?symbol=AAPL")
+      .expect(200);
+    assert.strictEqual(resValid.body.success, true);
+    assert.ok(resValid.body.data);
+    assert.strictEqual(resValid.body.data.symbol, "AAPL");
+    assert.strictEqual(resValid.body.data.status, "mocked");
+  });
 });

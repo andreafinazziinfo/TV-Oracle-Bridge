@@ -546,6 +546,99 @@ app.post("/api/download", async (req, res) => {
   }
 });
 
+// In-memory logs for TradingView alerts
+const alertsLogs = [];
+
+// 9. POST /api/alerts - Receive TradingView alert notifications
+app.post("/api/alerts", async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log(`[Alert Ingestion] Received alert payload:`, JSON.stringify(payload));
+
+    const alertMsg = payload.message || payload.text || "TradingView Alert Triggered";
+    const alertTime = new Date().toISOString();
+    const alertEntry = {
+      timestamp: alertTime,
+      payload: payload
+    };
+    alertsLogs.push(alertEntry);
+    if (alertsLogs.length > 500) {
+      alertsLogs.shift();
+    }
+
+    // Forward to notifier.py
+    try {
+      await execFileAsync('python', ['notifier.py', `🔔 [Alert] ${alertMsg}`], { cwd: rootDir });
+    } catch (notifierErr) {
+      console.error(`[Alert Ingestion] Failed to send alert notification via notifier.py:`, notifierErr.message);
+    }
+
+    res.json({ success: true, message: "Alert received and logged." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 10. GET /api/alerts - Retrieve alert logs history
+app.get("/api/alerts", (req, res) => {
+  res.json({ success: true, alerts: alertsLogs });
+});
+
+// 11. GET /api/extract/:type - Extract structured market data (options, heatmaps, yield curves)
+app.get("/api/extract/:type", async (req, res) => {
+  try {
+    const type = req.params.type;
+    const symbol = req.query.symbol || "";
+
+    if (type !== "options" && type !== "heatmap" && type !== "yield-curve" && type !== "yield") {
+      return res.status(400).json({ success: false, error: "Invalid extraction type. Allowed: options, heatmap, yield-curve, yield." });
+    }
+
+    // Sanitize symbol if provided (only allow alphanumeric, dash, colon, equals, slash)
+    if (symbol && /[^a-zA-Z0-9_\-:=/]/.test(symbol)) {
+      return res.status(400).json({ success: false, error: "Invalid symbol characters." });
+    }
+
+    console.log(`[Dashboard API] Requesting structured data extraction for: type=${type}, symbol=${symbol}`);
+
+    const args = ['remoteControl.mjs', 'extract', type];
+    if (symbol) {
+      args.push(symbol);
+    }
+
+    const { stdout, stderr } = await execFileAsync('node', args, { cwd: rootDir });
+
+    if (stderr && stderr.includes("Error")) {
+      return res.status(500).json({ success: false, error: stderr });
+    }
+
+    // Try parsing stdout as JSON, otherwise return raw
+    try {
+      const parsed = JSON.parse(stdout.trim());
+      res.json({ success: true, data: parsed });
+    } catch (parseErr) {
+      const lines = stdout.split("\n");
+      let jsonFound = false;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line) {
+          try {
+            const parsed = JSON.parse(line);
+            res.json({ success: true, data: parsed });
+            jsonFound = true;
+            break;
+          } catch (e) {}
+        }
+      }
+      if (!jsonFound) {
+        res.json({ success: true, raw: stdout });
+      }
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // --- Background Caching Daemon and Notifier ---
 let autoRefreshInterval = null;
 let isDaemonRunning = false;

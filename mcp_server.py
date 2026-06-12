@@ -365,11 +365,11 @@ def download_public_script(script_url: str, output_name: str = "downloaded_scrip
 
 @mcp.tool()
 def control_chart_macro(action_type: str = "save", value: str = "", symbol: str = "", interval: str = "") -> str:
-    """Execute a remote control macro on the active TradingView chart (change symbol, toggle drawings, or save layout).
+    """Execute a remote control macro on the active TradingView chart.
     
     Args:
-        action_type: The macro to execute: "change_symbol", "toggle_drawings", or "save".
-        value: The parameter value for the macro (e.g. new symbol name "BINANCE:ETHUSDT" for action "change_symbol").
+        action_type: The macro to execute: "change_symbol", "toggle_drawings", "save", "change_timeframe", or "clear_all_drawings".
+        value: The parameter value for the macro (e.g. "BINANCE:ETHUSDT" for action "change_symbol", or timeframe like "D" for "change_timeframe").
         symbol: The default chart symbol to navigate to.
         interval: The default chart timeframe.
     """
@@ -392,6 +392,35 @@ def control_chart_macro(action_type: str = "save", value: str = "", symbol: str 
         return f"Success: Chart macro executed.\nStdout:\n{result.stdout}"
     except subprocess.CalledProcessError as e:
         return f"Error running chart macro: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@mcp.tool()
+def get_structured_market_data(type_val: str, symbol: str = "") -> str:
+    """Extract structured market data from TradingView for Options chains, Heatmaps, or Bond Yield Curves.
+    
+    Args:
+        type_val: The type of data to extract: "options", "heatmap", or "yield-curve".
+        symbol: Optional symbol or category (e.g. "AAPL" for options, "crypto" for heatmap).
+    """
+    try:
+        if type_val not in ["options", "heatmap", "yield-curve", "yield"]:
+            return "Error: Invalid type_val. Allowed values: options, heatmap, yield-curve, yield."
+            
+        cmd = ["node", "remoteControl.mjs", "extract", type_val]
+        if symbol:
+            cmd.append(symbol)
+            
+        result = subprocess.run(
+            cmd,
+            cwd=str(ORACLE_DIR),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        return f"Error running data extraction: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
     except Exception as e:
         return f"Error: {e}"
 

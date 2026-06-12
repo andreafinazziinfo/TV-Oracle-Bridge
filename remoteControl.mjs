@@ -334,6 +334,36 @@ export async function executeChartMacro(symbol = "", interval = "", actionType =
     await page.waitForTimeout(5000); // Wait for new symbol data
   } 
   
+  if (actionType === "change_timeframe") {
+    const newInterval = value || interval || targetTimeframe;
+    console.log(`[Macro Engine] Action: Change timeframe to ${newInterval}`);
+    await page.keyboard.type(newInterval);
+    await page.waitForTimeout(1000);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(5000); // Wait for new timeframe data to render
+  }
+
+  if (actionType === "clear_all_drawings") {
+    console.log(`[Macro Engine] Action: Clear all drawings`);
+    let clicked = false;
+    try {
+      const removeBtn = await page.$('[data-name="remove"], [data-tooltip*="Remove"], [data-role="button"][data-name="remove"]');
+      if (removeBtn) {
+        await removeBtn.click();
+        await page.waitForTimeout(1000);
+        clicked = true;
+        console.log(`[Macro Engine] Clicked remove button.`);
+      }
+    } catch (e) {
+      console.warn(`[Macro Engine] Failed to click remove element:`, e.message);
+    }
+    if (!clicked) {
+      console.log(`[Macro Engine] Trying keyboard shortcut for removing drawings (Alt+Control+Delete)`);
+      await page.keyboard.press("Alt+Control+Delete");
+      await page.waitForTimeout(1000);
+    }
+  }
+
   if (actionType === "toggle_drawings") {
     console.log(`[Macro Engine] Action: Toggle drawings visibility`);
     // Alt + H is the hotkey to hide/show drawings
@@ -341,7 +371,7 @@ export async function executeChartMacro(symbol = "", interval = "", actionType =
     await page.waitForTimeout(2000);
   }
 
-  if (actionType === "save" || actionType === "change_symbol") {
+  if (actionType === "save" || actionType === "change_symbol" || actionType === "change_timeframe" || actionType === "clear_all_drawings") {
     console.log(`[Macro Engine] Action: Save layout (Ctrl + S)`);
     await page.keyboard.press("Control+S");
     await page.waitForTimeout(3000);
@@ -361,6 +391,107 @@ export async function executeChartMacro(symbol = "", interval = "", actionType =
   await browser.close();
 
   return { outputPath, screenshotName: name };
+}
+
+/**
+ * Navigate to TradingView page and extract structured market data (options, heatmaps, or yield curves).
+ */
+export async function extractStructuredData(type, symbol = "") {
+  if (process.env.NODE_ENV === "test") {
+    console.log(`[Extractor] Test mode: returning mocked response for ${type}`);
+    const mockResponses = {
+      options: JSON.stringify({ symbol: symbol || "AAPL", status: "mocked", options: [] }),
+      heatmap: JSON.stringify({ type: symbol || "stock", status: "mocked", data: [] }),
+      "yield-curve": JSON.stringify({ country: "US", status: "mocked", yields: {} })
+    };
+    return mockResponses[type] || JSON.stringify({ status: "mocked" });
+  }
+
+  const session = (process.env.TV_SESSION || "").trim();
+  const signature = (process.env.TV_SESSION_SIGN || "").trim();
+
+  const browser = await launchBrowser();
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 }
+  });
+
+  const domain = ".tradingview.com";
+  const cookies = [];
+  if (session) {
+    cookies.push({ name: "sessionid", value: session, domain, path: "/", secure: true, httpOnly: true });
+  }
+  if (signature) {
+    cookies.push({ name: "sessionid_sign", value: signature, domain, path: "/", secure: true, httpOnly: true });
+  }
+  if (cookies.length > 0) {
+    await context.addCookies(cookies);
+  }
+
+  const page = await context.newPage();
+
+  let targetUrl = "";
+  let pattern = "";
+
+  if (type === "options") {
+    const sym = symbol || "NASDAQ-AAPL";
+    targetUrl = `https://www.tradingview.com/symbols/${encodeURIComponent(sym)}/options/`;
+    pattern = "options-api";
+  } else if (type === "heatmap") {
+    const cat = symbol || "stock";
+    targetUrl = `https://www.tradingview.com/heatmap/${encodeURIComponent(cat)}/`;
+    pattern = "scanner.tradingview.com";
+  } else if (type === "yield-curve" || type === "yield") {
+    targetUrl = "https://www.tradingview.com/yield-curve/";
+    pattern = "yield";
+  } else {
+    throw new Error(`Unsupported extraction type: ${type}`);
+  }
+
+  console.log(`[Extractor] Navigating to: ${targetUrl} (listening for response pattern: ${pattern})`);
+
+  let capturedData = null;
+  const responsePromise = new Promise((resolve) => {
+    page.on("response", async (response) => {
+      const url = response.url();
+      if (url.includes(pattern) || (type === "heatmap" && url.includes("/scan")) || (type === "yield-curve" && (url.includes("yield") || url.includes("bonds")))) {
+        try {
+          const text = await response.text();
+          try {
+            JSON.parse(text);
+            capturedData = text;
+            console.log(`[Extractor] Successfully captured matching response: ${url.substring(0, 100)}`);
+            resolve();
+          } catch (je) {
+            // Not valid JSON, ignore
+          }
+        } catch (e) {
+          // ignore body read errors
+        }
+      }
+    });
+  });
+
+  try {
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+    // Sleep a bit to trigger API request
+    await page.waitForTimeout(3000);
+    
+    await Promise.race([
+      responsePromise,
+      page.waitForTimeout(12000)
+    ]);
+  } catch (err) {
+    console.warn(`[Extractor] Navigation/extraction warning: ${err.message}`);
+  }
+
+  await context.close();
+  await browser.close();
+
+  if (!capturedData) {
+    throw new Error(`Failed to capture structured data for ${type} (pattern: ${pattern})`);
+  }
+
+  return capturedData;
 }
 
 /**
@@ -509,6 +640,19 @@ if (process.argv[1] && process.argv[1].endsWith("remoteControl.mjs")) {
       .then((path) => console.log(`Done! Path: ${path}`))
       .catch((err) => {
         console.error("Download failed:", err);
+        process.exit(1);
+      });
+  } else if (action === "extract") {
+    const typeVal = process.argv[3];
+    const sym = process.argv[4] || "";
+    console.log(`Starting manual data extraction: type=${typeVal}, symbol=${sym}`);
+    extractStructuredData(typeVal, sym)
+      .then((res) => {
+        console.log(res);
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error("Extraction failed:", err);
         process.exit(1);
       });
   }

@@ -20,6 +20,7 @@
     "@mathieuc/tradingview": "^3.5.0",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
+    "pinets": "^0.9.22",
     "playwright": "^1.44.0",
     "sqlite3": "^6.0.1"
   },

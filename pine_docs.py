@@ -86,6 +86,40 @@ def get_pine_docs(function_name: str) -> str:
     return "\n".join(lines)
 
 
+def check_pine_compilation(code: str) -> tuple[bool, str]:
+    """Compile a block of Pine Script using the Node wrapper for @luxalgo/pinets."""
+    temp_dir = ORACLE_DIR / "out" / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = temp_dir / "temp_validation.pine"
+    
+    try:
+        temp_file.write_text(code, encoding="utf-8")
+    except Exception as e:
+        return False, f"Failed to write temporary validation file: {e}"
+        
+    wrapper_path = ORACLE_DIR / "pineTranspilerWrapper.mjs"
+    cmd = ["node", str(wrapper_path), str(temp_file)]
+    try:
+        res = subprocess.run(cmd, cwd=str(ORACLE_DIR), capture_output=True, text=True, timeout=15)
+        if temp_file.exists():
+            temp_file.unlink()
+            
+        if res.returncode == 0:
+            return True, "Code successfully compiled to JavaScript."
+        else:
+            error_msg = res.stderr.strip() or res.stdout.strip()
+            error_msg = error_msg.replace(str(temp_file), "script.pine")
+            return False, error_msg
+    except subprocess.TimeoutExpired:
+        if temp_file.exists():
+            temp_file.unlink()
+        return False, "Compilation timed out (15s limit exceeded)."
+    except Exception as e:
+        if temp_file.exists():
+            temp_file.unlink()
+        return False, f"Failed to run compilation check: {e}"
+
+
 def validate_pine_code(code: str) -> str:
     """Analyze a block of Pine Script code for common syntax and structure issues.
     
@@ -179,17 +213,29 @@ def validate_pine_code(code: str) -> str:
     if not is_indicator and not is_strategy:
         warnings.append("Warning: Script lacks an entry point. Add 'indicator(...)' or 'strategy(...)' call.")
         
-    if not warnings:
-        return "✅ Pine Script syntax looks good! No obvious syntax errors or version issues detected."
+    # Run transpiler compilation check
+    comp_success, comp_msg = check_pine_compilation(code)
+    
+    if not warnings and comp_success:
+        return "✅ Pine Script syntax looks good! No obvious syntax errors or version issues detected, and it successfully compiles to JavaScript."
         
     report = [
         "### 🔍 Pine Script Linter Report",
         "",
-        f"Found {len(warnings)} potential issue(s):",
+        f"Found {len(warnings)} potential static issue(s):" if warnings else "Found 0 static warnings.",
         ""
     ]
     for w in warnings:
         report.append(f"- {w}")
+        
+    report.append("")
+    report.append("---")
+    report.append("### 💻 Compilation Check (@luxalgo/pinets)")
+    if comp_success:
+        report.append("✅ Success: Code successfully compiled to JavaScript.")
+    else:
+        report.append("❌ Failure: Compilation failed with the following errors:")
+        report.append(f"```\n{comp_msg}\n```")
         
     return "\n".join(report)
 
