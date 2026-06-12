@@ -96,15 +96,13 @@ def sanitize_path(file_path: str) -> str:
     # Resolve to absolute path
     resolved = Path(cleaned).resolve()
     
-    # If it's a relative path, ensure it resolves within ORACLE_DIR
-    if not Path(cleaned).is_absolute():
-        expected_base = ORACLE_DIR
-        try:
-            resolved.relative_to(expected_base)
-        except ValueError:
-            raise ValueError(
-                f"Relative path '{cleaned}' resolves outside project directory."
-            )
+    # Ensure it resolves within ORACLE_DIR
+    try:
+        resolved.relative_to(ORACLE_DIR)
+    except ValueError:
+        raise ValueError(
+            f"Path '{cleaned}' resolves outside project directory."
+        )
     
     return str(resolved)
 

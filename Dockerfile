@@ -1,6 +1,6 @@
 # Use the official Microsoft Playwright image which includes Node.js, Python, 
 # and all system libraries required to run headless browsers (Chromium/Firefox/WebKit).
-FROM mcr.microsoft.com/playwright:v1.44.0-jammy
+FROM mcr.microsoft.com/playwright:v1.45.0-noble
 
 # Install python3-pip and ensure python symlink is set to python3
 RUN apt-get update && apt-get install -y python3-pip && \
@@ -18,7 +18,8 @@ RUN npm rebuild sqlite3 --build-from-source
 
 # Copy python dependencies and install them
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
 
 # Copy application code
 COPY . .
