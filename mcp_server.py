@@ -17,6 +17,12 @@ from pattern_detector import detect_from_oracle_file, get_candlestick_annotation
 from pine_docs import get_pine_docs as fetch_pine_docs, validate_pine_code as check_pine_syntax
 from tv_cache import get_last_cached_timestamp, merge_and_update_cache, get_cached_bars
 from notifier import send_notification as dispatch_notification
+from macro_data import (
+    get_economic_calendar as fetch_calendar_data,
+    format_calendar_markdown,
+    get_symbol_news as fetch_news_data,
+    format_news_markdown
+)
 
 
 @mcp.tool()
@@ -401,6 +407,28 @@ def send_notification(message: str, filepath: str = None) -> str:
         return dispatch_notification(message, filepath)
     except Exception as e:
         return f"Error sending notification: {e}"
+
+@mcp.tool()
+def get_economic_calendar(days_ahead: int = 7, countries: str = "US,EU,GB,JP") -> str:
+    """Retrieve upcoming macroeconomic calendar events from TradingView calendar feeds.
+    
+    Args:
+        days_ahead: Number of days ahead to scan (default: 7).
+        countries: Comma-separated list of country/region codes to filter (e.g. "US,EU,JP").
+    """
+    events = fetch_calendar_data(days_ahead, countries)
+    return format_calendar_markdown(events)
+
+@mcp.tool()
+def get_market_news(symbol: str = "BINANCE:BTCUSDT", limit: int = 5) -> str:
+    """Retrieve real-time market news headlines and description summaries for a specific asset ticker.
+    
+    Args:
+        symbol: Asset ticker format (e.g. "BINANCE:BTCUSDT", "NASDAQ:AAPL", "FX:EURUSD").
+        limit: Max number of news entries to fetch (default: 5).
+    """
+    news_items = fetch_news_data(symbol, limit)
+    return format_news_markdown(symbol, news_items)
 
 if __name__ == "__main__":
     mcp.run()
