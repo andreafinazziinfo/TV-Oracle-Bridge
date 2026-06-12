@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  tv-oracle-bridge:
+  mcp-server:
     build: .
-    container_name: tv-oracle-bridge
+    container_name: tv-oracle-mcp
     restart: unless-stopped
     env_file:
       - .env
@@ -14,7 +14,25 @@ services:
       - ./indicators.local.json:/app/indicators.local.json
     ports:
       - "8000:8000"
+    environment:
+      - TV_BROWSER_HEADLESS=true
+      - TV_BROWSER_TYPE=chromium
+    command: python mcp_server.py
+
+  dashboard:
+    build: .
+    container_name: tv-oracle-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Map output directories to access screenshots and JSON files locally
+      - ./out:/app/out
+      # Map local indicators configuration
+      - ./indicators.local.json:/app/indicators.local.json
+    ports:
       - "5000:5000"
     environment:
       - TV_BROWSER_HEADLESS=true
       - TV_BROWSER_TYPE=chromium
+    command: node dashboard/server.mjs
