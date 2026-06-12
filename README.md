@@ -66,7 +66,12 @@ graph TD
     E <-->|Injected Cookies| D
     C <-->|Secured WebSockets| D
     D -->|Real-time Plots, Tables & Graphics| C
-  ## ✨ Codebase Breakdown (How it Works)
+    C -->|Sanitized JSON Data| B
+```
+
+---
+
+## ✨ Codebase Breakdown (How it Works)
 
 This standalone project integrates multiple components to bridge the gap between TradingView's client-side runtime and your local python/agentic environment:
 
