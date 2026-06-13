@@ -13,7 +13,6 @@ scratch/
 package-lock.json
 *.db
 *.db-journal
-pine_docs_db.json
 daemon_state.json
 screener_presets.local.json
 
