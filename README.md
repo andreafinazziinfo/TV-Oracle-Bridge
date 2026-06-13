@@ -7,6 +7,10 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-3b82f6?style=for-the-badge&logo=python)](https://python.org)
 [![Protocol](https://img.shields.io/badge/mcp-fastmcp-ea580c?style=for-the-badge)](https://modelcontextprotocol.io/)
 
+[![CI](https://img.shields.io/github/actions/workflow/status/andreafinazziinfo/TV-Oracle-Bridge/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/andreafinazziinfo/TV-Oracle-Bridge/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/andreafinazziinfo/TV-Oracle-Bridge/codeql.yml?branch=main&style=flat-square&label=CodeQL)](https://github.com/andreafinazziinfo/TV-Oracle-Bridge/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/andreafinazziinfo/TV-Oracle-Bridge?style=flat-square&color=8b5cf6)](https://github.com/andreafinazziinfo/TV-Oracle-Bridge/releases)
+
 <p align="center">
   <strong>An elegant, offline TradingView indicator oracle and FastMCP Server</strong><br />
   Bridges real-time TradingView study executions (plots, graphic objects, strategies) to local AI agents and quantitative analysis scripts.
