@@ -19,7 +19,7 @@
   "dependencies": {
     "@mathieuc/tradingview": "^3.5.0",
     "@opus-aether-ai/pine-transpiler": "^0.4.8",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.1",
     "pinets": "^0.9.22",
