@@ -54,11 +54,14 @@ test("fetchIndicator.mjs validation checks", async () => {
     }
   );
 
-  // Test missing TV_SESSION
+  // Test missing TV_SESSION.
+  // Provide a dummy pineId via env so the pineId resolution check passes and
+  // execution reaches the TV_SESSION validation — keeps the test independent of
+  // the gitignored indicators.local.json (which holds the private pineId mapping).
   await assert.rejects(
     execFileAsync("node", [scriptPath, "completa"], {
       cwd: rootDir,
-      env: { ...process.env, TV_SESSION: "" }
+      env: { ...process.env, TV_SESSION: "", TV_PINE_ID_COMPLETA: "DUMMY_PINE_ID" }
     }),
     (err) => {
       assert.strictEqual(err.code, 1);
