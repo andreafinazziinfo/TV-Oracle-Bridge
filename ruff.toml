@@ -1,0 +1,18 @@
+# Ruff configuration for TV-Oracle-Bridge.
+# Lightweight gate: pyflakes (F) + pycodestyle errors (E) catch real problems
+# (unused/undefined names, syntax-level issues) without cosmetic churn.
+# Whitespace (W) and import-sorting (I) can be added later with `ruff format`.
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = ["E", "F"]
+# E501 (line too long) is non-critical for this codebase and would add noise.
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# Deferred module imports after runtime/server initialization are intentional:
+# mcp_server imports tool submodules after FastMCP init; screener_presets loads
+# optional local presets after defining defaults.
+"mcp_server.py" = ["E402"]
+"screener_presets.py" = ["E402"]

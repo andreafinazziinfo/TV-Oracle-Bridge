@@ -2,7 +2,7 @@
 screener_presets.py — Presets configuration and filtering for the Advanced Screener Layer.
 """
 
-from typing import List, Dict, Any, Callable
+from typing import Dict, Any
 
 # Helper to check if a value is a float/int
 def _is_num(v) -> bool:

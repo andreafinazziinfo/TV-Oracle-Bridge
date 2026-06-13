@@ -2,7 +2,6 @@
 test_bridge_utils.py — Unit tests for centralized bridge utilities.
 """
 
-import os
 import pytest
 from bridge_utils import sanitize_path, sanitize_url, init_io
 

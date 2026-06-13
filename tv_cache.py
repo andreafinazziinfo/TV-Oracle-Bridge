@@ -7,10 +7,7 @@ and cache eviction policies.
 
 import sqlite3
 import json
-import os
-import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 from bridge_utils import init_io

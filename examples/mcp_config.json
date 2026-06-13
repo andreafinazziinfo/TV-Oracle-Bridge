@@ -1,0 +1,13 @@
+{
+  "_comment": "Register the TV-Oracle-Bridge MCP server in an AI client (e.g. Claude Desktop's claude_desktop_config.json). Replace /abs/path/to with the absolute repo path. Credentials are read from the repo .env (copy from .env.example).",
+  "mcpServers": {
+    "tv-oracle-bridge": {
+      "command": "python",
+      "args": ["/abs/path/to/TV-Oracle-Bridge/mcp_server.py"],
+      "env": {
+        "TV_SYMBOL": "BINANCE:BTCUSDT",
+        "TV_TIMEFRAME": "60"
+      }
+    }
+  }
+}

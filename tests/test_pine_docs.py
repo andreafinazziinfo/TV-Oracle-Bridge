@@ -2,8 +2,6 @@
 test_pine_docs.py — Unit tests for Pine docs search engine and syntax validator.
 """
 
-import os
-import pytest
 from pine_docs import get_pine_docs, validate_pine_code
 
 def test_get_pine_docs():

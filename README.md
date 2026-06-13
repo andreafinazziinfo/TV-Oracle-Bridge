@@ -278,6 +278,16 @@ This script runs:
 1. **Python tests (`pytest`)**: 105 tests validating screeners, caching database operations, notifier dispatching, pattern classification, and path sanitizers.
 2. **Node.js tests (`node --test`)**: 12 test suites validating CLI scripts, Playwright configurations, cookie parsers, all Express endpoints (utilizing `supertest`), and the Local Sandbox transpilation/execution logic. The full suite is validated on Linux via CI (the SQLite native binding requires a platform-matched `npm install`).
 
+Lint locally with `ruff check .` (also enforced in CI).
+
+---
+## 📚 Resources
+
+- [`examples/`](examples/) — runnable REST, screener, alert-ingestion, and MCP-config samples
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — setup and runtime issue fixes
+- [`docs/INTEGRATION_CONTRACT.md`](docs/INTEGRATION_CONTRACT.md) — endpoint and tool contract
+- [`CHANGELOG.md`](CHANGELOG.md) — release history
+
 ---
 ## 🤖 Running the MCP Server
 

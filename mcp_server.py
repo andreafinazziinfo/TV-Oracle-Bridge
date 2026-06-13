@@ -2,15 +2,13 @@ import subprocess
 import os
 import sys
 import json
-from pathlib import Path
 from mcp.server.fastmcp import FastMCP
-from bridge_utils import init_io, ORACLE_DIR, sanitize_key, sanitize_path, sanitize_url
+from bridge_utils import init_io, ORACLE_DIR
 
 # Ensure UTF-8 stdout on Windows
 init_io()
 
 # Initialize FastMCP server
-import os
 mcp = FastMCP(
     "TV Oracle Bridge", 
     host=os.getenv("MCP_HOST", "127.0.0.1"), 

@@ -3,7 +3,6 @@ test_notifier.py — Unit tests for the alert notification dispatcher.
 """
 
 import os
-import pytest
 from unittest.mock import patch, MagicMock
 from notifier import send_notification
 

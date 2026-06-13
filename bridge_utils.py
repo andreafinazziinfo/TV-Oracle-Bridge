@@ -8,7 +8,6 @@ Centralizes:
 """
 
 import sys
-import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse

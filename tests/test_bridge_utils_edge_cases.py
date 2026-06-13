@@ -4,7 +4,7 @@ sanitization helpers: sanitize_key, sanitize_path, sanitize_url.
 """
 
 import pytest
-from bridge_utils import sanitize_key, sanitize_path, sanitize_url, ORACLE_DIR
+from bridge_utils import sanitize_key, sanitize_path, sanitize_url
 
 
 # ── sanitize_key ─────────────────────────────────────────────────────────────

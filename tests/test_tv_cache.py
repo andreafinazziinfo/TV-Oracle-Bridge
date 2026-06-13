@@ -2,10 +2,6 @@
 test_tv_cache.py — Unit tests for SQLite caching and run telemetry database.
 """
 
-import os
-import time
-import pytest
-from unittest.mock import patch
 from tv_cache import (
     init_db, get_connection, save_bars_to_cache, get_cached_bars,
     cleanup_old_bars, record_run, get_run_history, get_cache_stats, DB_PATH

@@ -2,7 +2,6 @@
 test_mcp_server.py — Integration smoke tests to verify FastMCP tool registrations.
 """
 
-import pytest
 from mcp_server import mcp
 
 def test_mcp_tools_registration():

@@ -5,7 +5,7 @@ indicators.local.json
 __pycache__/
 .DS_Store
 .venv/
-.venv-audit/
+.venv*/
 venv/
 scratch/
 .pytest_cache/

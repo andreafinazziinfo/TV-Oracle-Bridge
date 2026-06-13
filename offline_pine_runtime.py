@@ -5,9 +5,6 @@ Runs transpiled JS outputs against local cache, analyzes function coverage,
 and generates compatibility matrices.
 """
 
-import os
-import sys
-import json
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Tuple

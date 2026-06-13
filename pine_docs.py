@@ -1,4 +1,3 @@
-import sys
 import json
 import subprocess
 from pathlib import Path
@@ -166,7 +165,7 @@ def validate_pine_code(code: str) -> str:
         # Check obsolete functions/keywords
         if "study(" in clean_line:
             warnings.append(f"Line {idx+1}: 'study()' is obsolete. Use 'indicator()' in Pine Script v5/v6.")
-        if "security(" in clean_line and not "request.security(" in clean_line:
+        if "security(" in clean_line and "request.security(" not in clean_line:
             warnings.append(f"Line {idx+1}: Obsolete 'security()' call. Use 'request.security()' in v5/v6.")
             
         # Unmatched bracket/parenthesis check

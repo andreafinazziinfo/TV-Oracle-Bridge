@@ -2,7 +2,6 @@
 test_screener_core.py — Unit tests for TradingView query builder and markdown formatter.
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 from screener_core import build_query, execute_query, format_markdown, format_value
 

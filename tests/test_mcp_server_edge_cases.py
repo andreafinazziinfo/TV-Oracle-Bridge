@@ -1,11 +1,9 @@
 """
 test_mcp_server_edge_cases.py — Unit tests for FastMCP tools implementation.
 """
-import pytest
 import json
 import subprocess
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 # Import tool functions directly from mcp_server
 from mcp_server import (

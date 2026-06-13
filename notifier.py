@@ -23,11 +23,11 @@ def send_telegram_notification(token: str, chat_id: str, message: str, filepath:
             boundary = "----WebKitFormBoundaryTVOracleBridgeNotifier"
             parts = [
                 f"--{boundary}",
-                f'Content-Disposition: form-data; name="chat_id"',
+                'Content-Disposition: form-data; name="chat_id"',
                 "",
                 str(chat_id),
                 f"--{boundary}",
-                f'Content-Disposition: form-data; name="caption"',
+                'Content-Disposition: form-data; name="caption"',
                 "",
                 message,
                 f"--{boundary}",
@@ -81,7 +81,7 @@ def send_discord_notification(webhook_url: str, message: str, filepath: str = No
             }
             parts = [
                 f"--{boundary}",
-                f'Content-Disposition: form-data; name="payload_json"',
+                'Content-Disposition: form-data; name="payload_json"',
                 "Content-Type: application/json",
                 "",
                 json.dumps(payload),

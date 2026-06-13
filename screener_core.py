@@ -7,7 +7,7 @@ Constructs and executes arbitrary scanner queries and formats results.
 import json
 import urllib.request
 import urllib.error
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
 def get_scan_market(market: str) -> str:
     """Map user market parameter to TradingView scanner market name."""
@@ -28,8 +28,6 @@ def build_query(
     limit: int = 50
 ) -> Dict[str, Any]:
     """Constructs a raw TradingView scanner JSON payload."""
-    scan_market = get_scan_market(market)
-    
     # Ensure "name" is always the first column for symbol identification
     columns = list(fields)
     if "name" not in columns:

@@ -2,7 +2,6 @@
 test_pattern_detector.py — Unit tests for candlestick pattern detection (Hammer, Doji, Engulfing).
 """
 
-import pytest
 from pattern_detector import analyze_ohlc_patterns, get_candlestick_annotations, _detect_patterns
 
 def test_insufficient_data():

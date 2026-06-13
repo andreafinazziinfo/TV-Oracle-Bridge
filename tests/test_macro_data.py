@@ -1,7 +1,6 @@
 """
 test_macro_data.py — Unit tests for macroeconomic calendar and Yahoo News RSS feed extraction.
 """
-import pytest
 from unittest.mock import patch, MagicMock
 from macro_data import (
     clean_ticker_for_yahoo,

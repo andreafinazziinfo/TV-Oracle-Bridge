@@ -2,8 +2,7 @@
 test_screener.py — Smoke tests for presets and custom queries execution.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from screener import run_screener, run_custom_screener
 
 @patch("screener_core.execute_query")

@@ -3,7 +3,6 @@ test_pattern_detector_edge_cases.py — Extended edge-case tests for candlestick
 pattern detection covering all pattern types and boundary conditions.
 """
 
-import pytest
 from pattern_detector import (
     analyze_ohlc_patterns,
     get_candlestick_annotations,
