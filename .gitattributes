@@ -1,0 +1,22 @@
+# Normalize all text files to LF in the repository (prevents CRLF churn on Windows/WSL)
+* text=auto eol=lf
+
+# Explicit text types
+*.py    text eol=lf
+*.mjs   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+
+# Binary files — never normalize
+*.png   binary
+*.svg   binary
+*.db    binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary

@@ -275,8 +275,8 @@ The project includes a robust test framework checking Python modules and Express
 npm test
 ```
 This script runs:
-1. **Python tests (`pytest`)**: 24 tests validating screeners, caching database operations, notifier dispatching, pattern classification, and path sanitizers.
-2. **Node.js tests (`node --test`)**: 58 tests validating CLI scripts, Playwright configurations, cookie parsers, all Express endpoints (utilizing `supertest`), and the Local Sandbox transpilation/execution logic (82 total tests, ALL PASS).
+1. **Python tests (`pytest`)**: 105 tests validating screeners, caching database operations, notifier dispatching, pattern classification, and path sanitizers.
+2. **Node.js tests (`node --test`)**: 12 test suites validating CLI scripts, Playwright configurations, cookie parsers, all Express endpoints (utilizing `supertest`), and the Local Sandbox transpilation/execution logic. The full suite is validated on Linux via CI (the SQLite native binding requires a platform-matched `npm install`).
 
 ---
 ## 🤖 Running the MCP Server

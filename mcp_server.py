@@ -39,12 +39,12 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         range_val: Number of bars to load (default: 5000).
         wait_ms: Streaming wait time in milliseconds before snapshotting (default: 20000).
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
     from tv_cache import record_run
     
     symbol = os.getenv("TV_SYMBOL", "BINANCE:BTCUSDT")
     timeframe = os.getenv("TV_TIMEFRAME", "60")
-    started_at = datetime.utcnow().isoformat()
+    started_at = datetime.now(timezone.utc).isoformat()
     is_delta_sync = False
     
     try:
@@ -71,7 +71,7 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         out_file = ORACLE_DIR / "out" / f"{key}.json"
         if not out_file.exists():
             err_msg = f"Error: Indicator fetched but output file {out_file} not found."
-            finished_at = datetime.utcnow().isoformat()
+            finished_at = datetime.now(timezone.utc).isoformat()
             record_run(key, symbol, timeframe, started_at, finished_at, "failure", range_val, 0, is_delta_sync, err_msg)
             return f"{err_msg} Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
             
@@ -82,7 +82,7 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         # Merge fresh data with SQLite history and rewrite out/<key>.json
         merged_data = merge_and_update_cache(key, symbol, timeframe, fresh_data)
         
-        finished_at = datetime.utcnow().isoformat()
+        finished_at = datetime.now(timezone.utc).isoformat()
         record_run(
             key, symbol, timeframe, started_at, finished_at, "success", 
             range_val, merged_data.get("periodsCount", 0), is_delta_sync
@@ -101,11 +101,11 @@ def fetch_indicator(key: str = "completa", range_val: int = 5000, wait_ms: int =
         return json.dumps(summary, indent=2)
         
     except subprocess.CalledProcessError as e:
-        finished_at = datetime.utcnow().isoformat()
+        finished_at = datetime.now(timezone.utc).isoformat()
         record_run(key, symbol, timeframe, started_at, finished_at, "failure", range_val, 0, is_delta_sync, f"Subprocess error: {str(e.stderr)}")
         return f"Error running fetchIndicator: {e}\nStdout:\n{e.stdout}\nStderr:\n{e.stderr}"
     except Exception as e:
-        finished_at = datetime.utcnow().isoformat()
+        finished_at = datetime.now(timezone.utc).isoformat()
         record_run(key, symbol, timeframe, started_at, finished_at, "failure", range_val, 0, is_delta_sync, str(e))
         return f"Error: {e}"
 
@@ -188,7 +188,7 @@ def capture_screenshot(symbol: str = "BINANCE:BTCUSDT", timeframe: str = "60", n
             sidecar_data = {
                 "symbol": symbol,
                 "timeframe": timeframe,
-                "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "patterns": patterns
             }
             with open(json_path, "w", encoding="utf-8") as json_file:

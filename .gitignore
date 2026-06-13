@@ -5,7 +5,10 @@ indicators.local.json
 __pycache__/
 .DS_Store
 .venv/
+.venv-audit/
 venv/
+scratch/
+.pytest_cache/
 *.json.log
 package-lock.json
 *.db
