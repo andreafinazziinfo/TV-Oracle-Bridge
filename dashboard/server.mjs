@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import fs from "node:fs";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
@@ -47,6 +48,19 @@ const localPresetsPath = path.join(rootDir, "screener_presets.local.json");
 
 // Middleware
 app.use(express.json());
+
+// Rate limiting for the API surface: the dashboard is unauthenticated and some
+// routes spawn child processes (docker/python/node) or hit disk, so cap abuse.
+// Skipped under tests to keep supertest suites deterministic.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+});
+app.use("/api", apiLimiter);
+
 // Serve static client assets
 app.use(express.static(path.join(rootDir, "dashboard/public")));
 // Serve screenshots directly under /screenshots
@@ -730,6 +744,10 @@ app.get("/api/indicators/:key", async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid indicator key." });
     }
     const filePath = path.join(outDir, `${key}.json`);
+    // Defense-in-depth: ensure the resolved path stays within outDir.
+    if (!path.resolve(filePath).startsWith(path.resolve(outDir) + path.sep)) {
+      return res.status(400).json({ success: false, error: "Invalid indicator key." });
+    }
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, error: "Indicator cache file not found." });
     }
