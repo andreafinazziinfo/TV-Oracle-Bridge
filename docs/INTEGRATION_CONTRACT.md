@@ -2,7 +2,7 @@
 
 > **Version:** 1.0.0  
 > **Date:** 2026-06-12  
-> **Bridge Version:** 1.2.0  
+> **Bridge Version:** 1.1.0  
 > **Status:** Production-Ready  
 > **Consumer:** Standalone Client / AI agents via MCP
 

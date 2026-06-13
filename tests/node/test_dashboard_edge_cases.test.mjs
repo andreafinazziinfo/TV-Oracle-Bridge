@@ -16,7 +16,7 @@ describe("Dashboard API Edge Cases", () => {
     assert.strictEqual(res.body.status, "ok");
     assert.strictEqual(typeof res.body.uptime, "number");
     assert.ok(res.body.uptime >= 0, "uptime must be non-negative");
-    assert.strictEqual(res.body.version, "1.2.0");
+    assert.strictEqual(res.body.version, "1.1.0");
     assert.ok(res.body.timestamp, "timestamp must be present");
     // Validate ISO-8601 parsability
     assert.ok(!isNaN(Date.parse(res.body.timestamp)), "timestamp must be ISO-8601");

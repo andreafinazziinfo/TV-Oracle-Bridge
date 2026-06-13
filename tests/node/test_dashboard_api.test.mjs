@@ -11,7 +11,7 @@ describe("Dashboard API Endpoints", () => {
       
     assert.strictEqual(res.body.status, "ok");
     assert.strictEqual(typeof res.body.uptime, "number");
-    assert.strictEqual(res.body.version, "1.2.0");
+    assert.strictEqual(res.body.version, "1.1.0");
   });
 
   test("GET /api/session/validate runs successfully", async () => {

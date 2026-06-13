@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-06-13
+## [1.1.0] - 2026-06-13
 
 ### Added
 - Local Pine Script sandbox in the dashboard: offline indicator evaluation (PineTS + `@opus-aether-ai/pine-transpiler`) and C++ strategy backtests (PineForge Docker), rendered on Lightweight Charts with entries/exits, volume, and custom plot lines.
@@ -46,6 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detector, macro/news feeds, and Playwright-based chart capture.
 - Apache-2.0 licensing and security hardening (command-injection, XSS, path-traversal mitigations).
 
-[Unreleased]: https://github.com/andreafinazziinfo/TV-Oracle-Bridge/compare/v1.2.0...HEAD
-[1.2.0]: https://github.com/andreafinazziinfo/TV-Oracle-Bridge/compare/v1.0.0...v1.2.0
+[Unreleased]: https://github.com/andreafinazziinfo/TV-Oracle-Bridge/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/andreafinazziinfo/TV-Oracle-Bridge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/andreafinazziinfo/TV-Oracle-Bridge/releases/tag/v1.0.0
