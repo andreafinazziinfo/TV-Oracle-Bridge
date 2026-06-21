@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /**
- * Idempotent patch for @mathieuc/tradingview: make the protocol parser resilient
- * to a malformed/oversized strategyReport blob (bad base64 / jszip "Can't find
- * end of central directory"). Without this the parse throws an *unhandled*
- * rejection that kills the whole study fetch (periods/plots/graphic lost).
+ * Idempotent patch for @mathieuc/tradingview's strategyReport parsing.
+ *
+ * The report blob is a raw **zlib** stream (magic 0x78 0x9c), but the lib feeds
+ * it to JSZip (which expects a "PK" zip) -> "Can't find end of central directory"
+ * -> the parse throws an *unhandled* rejection that killed the whole study fetch.
+ * Fix #1 (protocol.js): inflate the blob with zlib (zip fallback kept) so
+ * strategyReport.trades/performance actually populate. Fix #2 (study.js): keep
+ * the call wrapped in try/catch so any future malformed chunk can't crash the stream.
  *
  * Re-applied automatically via the package.json `postinstall` hook so it survives
  * `npm install`. Safe to run multiple times.
@@ -24,19 +28,26 @@ const patches = [
     );
   },`,
     replace: `  async parseCompressed(data) {
-    const zip = new JSZip();
     try {
+      const buf = Buffer.from(data, 'base64');
+      // TV streams the strategy report as a raw zlib stream (magic 0x78 0x9c),
+      // NOT a zip archive — jszip throws "Can't find end of central directory".
+      // Inflate it directly, then JSON.parse. Fall back to the legacy zip path
+      // for any payload that really is a zip ("PK" = 0x50 0x4b).
+      if (buf[0] === 0x78) {
+        const zlib = require('zlib');
+        return JSON.parse(zlib.inflateSync(buf).toString('utf8'));
+      }
+      const zip = new JSZip();
       return JSON.parse(
-        await (
-          await zip.loadAsync(data, { base64: true })
-        ).file('').async('text'),
+        await (await zip.loadAsync(data, { base64: true })).file('').async('text'),
       );
     } catch (e) {
       // PATCHED: malformed compressed chunk must not reject/crash the stream.
       return {};
     }
   },`,
-    marker: "// PATCHED: malformed compressed chunk",
+    marker: "raw zlib stream (magic 0x78",
   },
   {
     file: new URL("chart/study.js", ROOT),
