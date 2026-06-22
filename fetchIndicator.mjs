@@ -136,6 +136,10 @@ const finish = (status) => {
         cells: typeof t.cells === "function" ? t.cells() : t.cells,
       })),
     },
+    // Raw drawing table keyed by TV drawType (e.g. dwgpolylines) — the parser only
+    // exposes known types, so Pine polyline.new() (the OHLC "Proiezione Prezzo") is
+    // otherwise dropped. raw() returns the full #graphic; serialize it for parity.
+    graphicRaw: typeof graphic.raw === "function" ? graphic.raw() : undefined,
     // For strategy() scripts (e.g. Model Entry): executed trades + performance.
     // entry/exit carry price+time+type; exit.name says why it closed (SL/TP/...).
     strategyReport: study.strategyReport || null,
