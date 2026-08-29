@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "TV-Oracle-Bridge — fetch_indicator Request",
+    "output": "tv-oracle-bridge-sequence.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "views": [
+      { "id": "session-bootstrap", "label": "Session bootstrap", "focus": ["mcp_server", "playwright", "tradingview"], "note": "Playwright automation injects authenticated cookies before any WebSocket fetch can succeed." },
+      { "id": "fetch-flow", "label": "fetch_indicator call", "focus": ["client", "mcp_server", "extractor", "tradingview"], "note": "The documented MCP tool: subprocess extractor streams plots over a secured WebSocket and returns sanitized JSON." }
+    ]
+  },
+  "participants": [
+    { "id": "client", "type": "external", "label": "AI Agent", "sublabel": "Claude Desktop / MCP client" },
+    { "id": "mcp_server", "type": "backend", "label": "mcp_server.py", "sublabel": "FastMCP server" },
+    { "id": "playwright", "type": "backend", "label": "remoteControl.mjs", "sublabel": "Playwright automation" },
+    { "id": "extractor", "type": "backend", "label": "fetchIndicator.mjs", "sublabel": "extractor engine" },
+    { "id": "tradingview", "type": "external", "label": "TradingView", "sublabel": "WebSocket protocol" }
+  ],
+  "segments": [
+    { "from": 180, "to": 330, "label": "Session bootstrap (periodic)" },
+    { "from": 350, "to": 625, "label": "fetch_indicator (per request)" }
+  ],
+  "messages": [
+    { "id": "launch-browser", "from": "mcp_server", "to": "playwright", "y": 200, "label": "automate browser", "variant": "dashed" },
+    { "id": "inject-cookies", "from": "playwright", "to": "tradingview", "y": 245, "label": "authenticate, inject cookies", "variant": "dashed" },
+    { "id": "session-ok", "from": "tradingview", "to": "playwright", "y": 285, "label": "session cookies", "variant": "return" },
+    { "id": "fetch-call", "from": "client", "to": "mcp_server", "y": 360, "label": "fetch_indicator(key, range_val, wait_ms)", "variant": "emphasis" },
+    { "id": "spawn-subprocess", "from": "mcp_server", "to": "extractor", "y": 405, "label": "spawn subprocess" },
+    { "id": "open-ws", "from": "extractor", "to": "tradingview", "y": 450, "label": "open secured WebSocket" },
+    { "id": "stream-data", "from": "tradingview", "to": "extractor", "y": 495, "label": "plots, tables, graphics", "variant": "return" },
+    { "id": "sanitized-json", "from": "extractor", "to": "mcp_server", "y": 540, "label": "sanitized JSON", "variant": "return" },
+    { "id": "mcp-response", "from": "mcp_server", "to": "client", "y": 585, "label": "indicator response", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "mcp_server", "from": 200, "to": 625, "type": "backend" },
+    { "participant": "playwright", "from": 200, "to": 288, "type": "backend" },
+    { "participant": "extractor", "from": 405, "to": 543, "type": "backend" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Two integration surfaces", "items": ["MCP Server: JSON-RPC over stdio, no auth (local process)", "Dashboard REST API: HTTP/JSON on :5000, local network only (not shown here)"] },
+    { "dot": "emerald", "title": "Two-stage TradingView access", "items": ["Playwright automation (remoteControl.mjs) owns cookie-based session auth", "fetchIndicator.mjs reuses that session for a direct secured WebSocket, no browser per fetch"] },
+    { "dot": "amber", "title": "15 MCP tools", "items": ["fetch_indicator is one of 15 tools registered via FastMCP", "Others cover screener, pattern detection, docs, notifier — not shown in this flow"] }
+  ]
+}

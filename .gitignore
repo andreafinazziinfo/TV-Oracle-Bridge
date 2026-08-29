@@ -16,5 +16,10 @@ package-lock.json
 daemon_state.json
 screener_presets.local.json
 
+# archify diagram output (regenerable — see
+# cyclelab-terminal/docs/plans/ARCHIFY_DIAGRAM_ADOPTION_PLAN.md §3)
+archify-out/*.html
+archify-out/*.visual-check.*
+
 
 
