@@ -14,7 +14,7 @@ function mockFetch({ owned = true, status = 200 } = {}) {
     calls.push({ url, method: init.method || "GET", body: init.body?.toString() });
     const json = (d, s = status) => ({ ok: s >= 200 && s < 300, status: s, json: async () => d });
     if (url.includes("/list")) return json(owned ? [{ scriptIdPart: "USER;abc", scriptName: "Mine" }] : []);
-    if (url.includes("/get/")) return json({ scriptSource: SRC_OLD });
+    if (url.includes("/get/")) return json({ source: SRC_OLD });
     if (url.includes("/save/next/")) return json({ success: true });
     return json({}, 404);
   };

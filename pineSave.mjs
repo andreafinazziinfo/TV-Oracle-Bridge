@@ -43,11 +43,12 @@ export function createClient({ cookie, fetchFn = fetch, delayMs = 1000 }) {
   return {
     // VERIFIED (used by @mathieuc/tradingview getPrivateIndicators)
     listSaved: () => req(`${BASE}/list?filter=saved`),
-    // ASSUMED (web-editor endpoint, not in the library)
+    // VERIFIED live 2026-11-13 (GET /get/<id>/last returns `source`)
     getSource: async (id, version = "last") => {
       const d = await req(`${BASE}/get/${encodeURIComponent(id)}/${version}?no_4xx=true`);
-      if (typeof d?.scriptSource !== "string") throw new Error("Unexpected get response: no scriptSource");
-      return d.scriptSource;
+      const src = d?.source ?? d?.scriptSource; // VERIFIED live 2026-11-13: field is `source`
+      if (typeof src !== "string") throw new Error("Unexpected get response: no source");
+      return src;
     },
     // ASSUMED (web-editor endpoint). Only `source` (+ optional name) is sent: no visibility fields.
     saveNext: (id, source, name) => {
