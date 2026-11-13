@@ -228,6 +228,15 @@ Example:
 node fetchIndicator.mjs completa 5000 20000
 ```
 
+### 1b. Reading / Saving a Pine Script (`pineSave.mjs`)
+Download or save a new version of one of **your own private** scripts (uses `TV_SESSION` / `TV_SESSION_SIGN` from `.env`):
+```bash
+node pineSave.mjs get <scriptId|name> [--out out/my.pine]
+node pineSave.mjs save <scriptId> --file my.pine            # DRY-RUN (default): id, sha256, bytes, line-diff stats
+node pineSave.mjs save <scriptId> --file my.pine --yes      # real write (new version, stays private)
+```
+Safety: refuses scripts not in the account's saved list; never publishes or changes visibility; always writes the current server version to `out/backups/<id>_<timestamp>.pine` first (`out/` and `*.pine` are gitignored); one request at a time (`--delay`, default 1000 ms); aborts on any non-2xx. The `list` endpoint is the same one `@mathieuc/tradingview` uses; the `get`/`save/next` endpoints are taken from the web editor's behaviour and are **unverified against a live account** — run a dry-run first.
+
 ### 2. Capturing Chart Screenshots (with Canvas Overlays)
 Take high-resolution snapshots of your chart layouts:
 ```bash
@@ -331,6 +340,39 @@ python mcp_server.py
 ```
 
 ---
+
+## Pine save via real browser (`pineSaveBrowser.mjs`)
+
+Saves a new private version of your own Pine script by driving a real Chromium through the TradingView
+editor (the direct `pine-facade` save is blocked by the CDN). No header spoofing, no captcha bypass:
+on login wall / captcha / 2FA it stops with exit code 2.
+
+```bash
+# dry-run (default): opens the editor, types the source, does NOT save
+node pineSaveBrowser.mjs --id "USER;<hash>" --file out/new.pine [--headed] [--shots dir]
+# save a new version (Ctrl+S, same name, never publishes, visibility untouched)
+node pineSaveBrowser.mjs --id "USER;<hash>" --file out/new.pine --yes
+# verify
+node pineSave.mjs get "USER;<hash>" --out out/after.pine
+```
+
+Cookies `TV_SESSION` / `TV_SESSION_SIGN` are read from `.env` and never printed. If Playwright's pinned
+Chromium is not installed, set `PW_CHROMIUM=/path/to/chrome`. The source is pasted through the clipboard (verbatim, one edit).
+
+### Design note: unattended run in GitHub Actions (not implemented)
+
+A scheduled/`workflow_dispatch` job could run `pineSaveBrowser.mjs --yes` on `ubuntu-latest`
+(`npx playwright install --with-deps chromium`). Credentials would live **only** in GitHub encrypted
+secrets (`TV_SESSION`, `TV_SESSION_SIGN`), which **the owner must create** in the repo settings;
+this repo ships no secret and the workflow is not created. Pine source would be a private artifact or
+a checkout of a private repo, never a public one. Risks:
+
+- **Session cookie expiry/rotation**: `sessionid` expires or is invalidated on logout/password change/new
+  login; the job then fails (by design) and the owner must refresh the secrets by hand.
+- **TradingView ToS / automation limits**: UI automation may violate the terms or trigger anti-bot
+  challenges from datacenter IPs; the script stops on any challenge and must never bypass it. Use low frequency.
+- **Secret exposure**: a session cookie is full account access; restrict to protected branches/environments
+  with required reviewers, no PR-from-fork triggers, no debug screenshots or logs uploaded as artifacts, mask values.
 
 ## ⚖️ License & Trademark
 
