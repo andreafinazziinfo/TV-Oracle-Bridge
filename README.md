@@ -228,6 +228,15 @@ Example:
 node fetchIndicator.mjs completa 5000 20000
 ```
 
+### 1b. Reading / Saving a Pine Script (`pineSave.mjs`)
+Download or save a new version of one of **your own private** scripts (uses `TV_SESSION` / `TV_SESSION_SIGN` from `.env`):
+```bash
+node pineSave.mjs get <scriptId|name> [--out out/my.pine]
+node pineSave.mjs save <scriptId> --file my.pine            # DRY-RUN (default): id, sha256, bytes, line-diff stats
+node pineSave.mjs save <scriptId> --file my.pine --yes      # real write (new version, stays private)
+```
+Safety: refuses scripts not in the account's saved list; never publishes or changes visibility; always writes the current server version to `out/backups/<id>_<timestamp>.pine` first (`out/` and `*.pine` are gitignored); one request at a time (`--delay`, default 1000 ms); aborts on any non-2xx. The `list` endpoint is the same one `@mathieuc/tradingview` uses; the `get`/`save/next` endpoints are taken from the web editor's behaviour and are **unverified against a live account** — run a dry-run first.
+
 ### 2. Capturing Chart Screenshots (with Canvas Overlays)
 Take high-resolution snapshots of your chart layouts:
 ```bash

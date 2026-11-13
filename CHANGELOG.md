@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `pineSave.mjs`: CLI to `get` and `save` (new version of) an owned private Pine script via pine-facade. Dry-run by default, `--yes` to write, ownership check, automatic local backup, mocked-HTTP unit tests.
+
 ## [1.1.0] - 2026-06-13
 
 ### Added
